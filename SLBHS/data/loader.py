@@ -57,10 +57,10 @@ class DataLoader:
             return [d]
 
         # Directory → all *_crop---* files inside
-        pattern = os.path.join(d, '*_crop---*')
+        pattern = os.path.join(d, '*.h5')
         files = sorted(glob.glob(pattern))
         if not files:
-            raise FileNotFoundError(f'No *_crop---* files found in directory: {d}')
+            raise FileNotFoundError(f'No h5 files found in directory: {d}')
         return files
 
     def _cache_path(self, file_list):

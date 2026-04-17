@@ -1,0 +1,10 @@
+venv/
+venv
+*.pyc
+__pycache__/
+*.egg-info/
+results/
+results/**/
+umap_cache/
+notebooks/
+.DS_Store

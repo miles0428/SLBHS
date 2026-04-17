@@ -103,7 +103,8 @@ class UMAPReducer:
             n_actual = len(cache)
             np.random.seed(seed)
             X_sc_len = np.sum(self.super_labels == sc_id)
-            sc_idx = np.random.choice(X_sc_len, n_actual, replace=False)
+            n_choice = min(n_actual, X_sc_len)
+            sc_idx = np.random.choice(X_sc_len, n_choice, replace=n_choice>=X_sc_len)
             return cache, sc_idx
 
         mask = self.super_labels == sc_id

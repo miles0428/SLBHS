@@ -1,0 +1,5 @@
+{
+  "n_super": 20,
+  "n_centers": 512,
+  "linkage": "ward"
+}

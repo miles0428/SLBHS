@@ -216,7 +216,7 @@ class KMeansClusterer:
 
     def fit_minibatch(self, k=None, seed=None, X=None,
                   init='k-means++', n_init=3, max_iter=300,
-                  batch_size=1024, reassignment_ratio=0.01, max_no_improvement=10,
+                  batch_size=30000, reassignment_ratio=0.01, max_no_improvement=10,
                   algorithm='lloyd'):
         """
         Run MiniBatch K-Means clustering (faster for large datasets).

@@ -83,7 +83,7 @@ class KMeansClusterer:
             n_init=n_init,
             max_iter=max_iter,
             random_state=self.seed,
-            algorithm=algorithm,
+            
         )
         km.fit(self.X_scaled_)
         self.labels_ = km.labels_
@@ -216,7 +216,7 @@ class KMeansClusterer:
 
     def fit_minibatch(self, k=None, seed=None, X=None,
                   init='k-means++', n_init=3, max_iter=300,
-                  batch_size=30000, reassignment_ratio=0.01, max_no_improvement=10,
+                  batch_size=5000, reassignment_ratio=0.01, max_no_improvement=10,
                   algorithm='lloyd'):
         """
         Run MiniBatch K-Means clustering (faster for large datasets).
@@ -247,7 +247,7 @@ class KMeansClusterer:
         print(f'[MiniBatchKMeans] Scaling {self.X.shape} ...')
         self.X_scaled_ = self.scaler.fit_transform(self.X)
 
-        print(f'[MiniBatchKMeans] Fitting MiniBatchKMeans k={self.k} seed={self.seed} batch_size={batch_size} ...')
+        print(f'[MiniBatchKMeans] Fitting MiniBatchKMeans k={self.k} seed={self.seed} batch_size={batch_size} n_init={n_init} max_iter={max_iter} ...')
         km = MiniBatchKMeans(
             n_clusters=self.k,
             init=init,
@@ -257,7 +257,7 @@ class KMeansClusterer:
             reassignment_ratio=reassignment_ratio,
             max_no_improvement=max_no_improvement,
             random_state=self.seed,
-            algorithm=algorithm,
+            verbose=1,
         )
         km.fit(self.X_scaled_)
         self.labels_ = km.labels_

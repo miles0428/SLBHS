@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument('--results-dir', type=str, default=None, help='Results directory')
     parser.add_argument('--dpi', type=int, default=200, help='PNG DPI')
     parser.add_argument('--format', type=str, default='png', choices=['png', 'svg', 'both'])
+    parser.add_argument('--batch-size', type=int, default=5000, help='MiniBatch K-Means batch size')
     parser.add_argument('--skip-kmeans', action='store_true', help='Skip K-Means (load existing)')
     parser.add_argument('--skip-super', action='store_true', help='Skip super clustering')
     parser.add_argument('--skip-umap', action='store_true', help='Skip UMAP computation')
@@ -51,7 +52,7 @@ def main():
 
     # ---- 1. Load data ----
     print('=== Step 1: Load data ===')
-    loader = DataLoader(data_dir=args.data_dir)
+    loader = DataLoader(data_dir=args.data_dir, cache_dir=results_dir)
     X, meta = loader.load()
     print(f'  Loaded {X.shape[0]} frames, {X.shape[1]} dims')
 
@@ -61,9 +62,9 @@ def main():
         kc = KMeansClusterer(results_dir=results_dir)
         kc.load()
     else:
-        print(f'=== Step 2: K-Means k={args.k} ===')
+        print(f'=== Step 2: MiniBatch K-Means k={args.k} batch_size={args.batch_size} ===')
         kc = KMeansClusterer(X=X, results_dir=results_dir)
-        kc.fit(k=args.k, seed=args.seed)
+        kc.fit_minibatch(k=args.k, seed=args.seed, batch_size=args.batch_size)
         kc.save()
 
     labels = kc.labels_
@@ -94,7 +95,7 @@ def main():
     X_scaled = scaler.fit_transform(X)
 
     # ---- 5. UMAP ----
-    reducer = UMAPReducer(X_scaled, super_labels=frame_super)
+    reducer = UMAPReducer(X_scaled, super_labels=frame_super, cache_dir=results_dir)
 
     if args.skip_umap:
         print('=== Step 5: Skip UMAP ===')

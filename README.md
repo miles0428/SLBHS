@@ -1,4 +1,4 @@
-# SLBHS — Sign Language Basic Handshapes
+# SLBHS — Sign Language Basic HandShapes
 
 Hand pose clustering and UMAP visualization pipeline for sign language basic handshapes.
 

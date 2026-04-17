@@ -83,7 +83,7 @@ class KMeansClusterer:
             n_init=n_init,
             max_iter=max_iter,
             random_state=self.seed,
-            algorithm=algorithm,
+            
         )
         km.fit(self.X_scaled_)
         self.labels_ = km.labels_

@@ -11,7 +11,7 @@ install_requires = [
 setup(
     name="SLBHS",
     version="0.1.00",
-    packages=find_packages(where=["SLBHS"], include=["SLBHS", "SLBHS.*"]),
+    packages=["SLBHS", "SLBHS.data", "SLBHS.clustering", "SLBHS.viz"],
     package_dir={"": "."},
     install_requires=install_requires,
     author="Yu-Cheng Chung",

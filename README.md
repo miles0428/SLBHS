@@ -1,23 +1,89 @@
-# TWSLT — Taiwanese Sign Language Translation
+# TWSLT — Tainan Wild Sign Language Corpus
 
-## 目標
-對台灣手語影片的 MediaPipe hand landmark 資料進行分析、對齊、與動作聚類。
+Hand pose clustering and UMAP visualization pipeline for TWSLT data.
 
-## 資料格式
-每支影片輸出為 `.h5` 檔，包含：
-- `aligned_63d` — (N, 63) 對齊後 landmark，21 joints × 3 components
-- `x_vec`, `y_vec`, `z_vec` — (N, 3) 手部座標軸
-- `wrist_px` — (N, 3) 腕關節像素座標
-- `is_mirror` — (N,) 是否為鏡像（數學推導）資料
+## Installation
 
-## Pipeline
-1. **Preprocessing** — 從 MP4 提取 landmark + 旋轉對齊
-2. **K-Means** — 對 `aligned_63d` 做聚類（第一層）
-3. **Temporal Segmentation** — 時間序列切分
-4. **Model** — 手語動作辨識
+### Install directly from GitHub (no local clone needed)
 
-## 目前進度
-- [x] 對齊驗證：掌心平面已固定到 z=0 平面，掌心法向量已統一朝向 +z
-- [ ] K-Means 聚類
-- [ ] Temporal segmentation
-- [ ] 動作模型
+```bash
+pip install git+https://github.com/miles0428/SLBHS.git
+```
+
+### Clone and install locally (recommended when developing)
+
+```bash
+git clone https://github.com/miles0428/SLBHS.git
+cd SLBHS
+pip install .
+```
+
+## Quick Start
+
+```bash
+# Full pipeline: load data → K-Means → SuperCluster → UMAP → plot → save
+python run_visualization.py --k 512 --n-super 20 --format both
+
+# Skip K-Means and SuperCluster (load cached results)
+python run_visualization.py --skip-kmeans --skip-super
+
+# Customize UMAP sampling
+python run_visualization.py --k 512 --n-super 20 --overview-n 10000 --sc-n 2000
+```
+
+## Architecture
+
+```
+TWSLT/
+├── data/loader.py          DataLoader — H5 reader (multi-file concat + cache)
+├── clustering/
+│   ├── kmeans.py           KMeansClusterer — fit/save/elbow/silhouette
+│   ├── super_cluster.py     SuperClusterer — hierarchical clustering on centers
+│   └── reducer.py           UMAPReducer — with persistent cache
+├── viz/
+│   ├── layout.py           GridLayout — gridspec parameters
+│   ├── plot_config.py      plot_config — constants
+│   └── visualizer.py       TWSLTViz — main plotter
+└── run_visualization.py    pipeline entry point
+```
+
+## Key Classes
+
+```python
+from TWSLT.data.loader import DataLoader
+from TWSLT.clustering.kmeans import KMeansClusterer
+from TWSLT.clustering.super_cluster import SuperClusterer
+from TWSLT.clustering.reducer import UMAPReducer
+from TWSLT.viz.visualizer import TWSLTViz
+
+# 1. Load data
+X, meta = DataLoader('/path/to/h5/files/').load()
+
+# 2. K-Means
+kc = KMeansClusterer(X, results_dir='results')
+kc.fit(k=512); kc.save()
+
+# 3. SuperCluster
+sc = SuperClusterer(kc.labels_, kc.centers_)
+sc.fit(n_super=20); sc.save()
+
+# 4. UMAP (cached)
+from sklearn.preprocessing import StandardScaler
+X_scaled = StandardScaler().fit_transform(X)
+reducer = UMAPReducer(X_scaled, super_labels=sc.frame_super_)
+ov, ov_idx = reducer.transform_overview(n=10000)
+
+# 5. Plot
+viz = TWSLTViz(X=X_scaled, kmeans_labels=kc.labels_,
+                kmeans_centers=kc.centers_,
+                frame_super=sc.frame_super_)
+viz.plot(overview_umap=ov, overview_labels=sc.frame_super_[ov_idx])
+viz.save_svg('output.svg')
+viz.save_png('output.png', dpi=300)
+```
+
+## Author
+Yu-Cheng Chung
+
+## License
+MIT

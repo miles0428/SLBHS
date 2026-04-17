@@ -158,9 +158,11 @@ class TWSLTViz:
         n_colors = max(len(sc_unique), 20)
         cmap = cm.get_cmap(cmap_name, n_colors)
 
+        # Ensure labels match umap points
+        n_points = min(len(umap_coords), len(overview_labels))
         ax.scatter(
-            umap_coords[:, 0], umap_coords[:, 1],
-            c=[cmap(int(l) % n_colors) for l in overview_labels],
+            umap_coords[:n_points, 0], umap_coords[:n_points, 1],
+            c=[cmap(int(l) % n_colors) for l in overview_labels[:n_points]],
             s=scatter_size, alpha=scatter_alpha,
         )
         ax.set_title('Overview — 20 Super Clusters', fontsize=TITLE_SIZE - 2)
@@ -179,9 +181,15 @@ class TWSLTViz:
             # Support both old format (just coords) and new format (coords, labels)
             if isinstance(entry, tuple) and len(entry) == 2:
                 umap_sc, labels_sc = entry
+                # Ensure labels match umap points (handle mismatched sizes)
+                if len(umap_sc) != len(labels_sc):
+                    labels_sc = labels_sc[:len(umap_sc)]
             else:
                 umap_sc = entry
                 labels_sc = self.kmeans_labels[self.frame_super == sc_id]
+                # Ensure labels match umap points
+                if len(umap_sc) != len(labels_sc):
+                    labels_sc = labels_sc[:len(umap_sc)]
 
             if len(umap_sc) == 0:
                 ax.set_title(f'SC {sc_id} ({n_frames_total} fr)', fontsize=SC_TITLE_SIZE)

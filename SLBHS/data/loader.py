@@ -56,11 +56,15 @@ class DataLoader:
         if os.path.isfile(d):
             return [d]
 
-        # Directory → all *_crop---* files inside
+        # Directory → all *.h5 files inside
         pattern = os.path.join(d, '*.h5')
         files = sorted(glob.glob(pattern))
         if not files:
             raise FileNotFoundError(f'No h5 files found in directory: {d}')
+        # Limit to first N files if specified (for testing)
+        max_files = os.environ.get('TWSLT_MAX_FILES')
+        if max_files:
+            files = files[:int(max_files)]
         return files
 
     def _cache_path(self, file_list):

@@ -1,4 +1,4 @@
-# SLBHS — Sign Language Basic HandShapes
+# SLBHS — Sign Language Basic Handshapes
 
 Hand pose clustering and UMAP visualization pipeline for sign language basic handshapes.
 
@@ -34,12 +34,12 @@ python run_visualization.py --k 512 --n-super 20 --overview-n 10000 --sc-n 2000
 ## Architecture
 
 ```
-TWSLT/
+SLBHS/
 ├── data/loader.py          DataLoader — H5 reader (multi-file concat + cache)
 ├── clustering/
 │   ├── kmeans.py           KMeansClusterer — fit/save/elbow/silhouette
-│   ├── super_cluster.py     SuperClusterer — hierarchical clustering on centers
-│   └── reducer.py           UMAPReducer — with persistent cache
+│   ├── super_cluster.py    SuperClusterer — hierarchical clustering on centers
+│   └── reducer.py          UMAPReducer — with persistent cache
 ├── viz/
 │   ├── layout.py           GridLayout — gridspec parameters
 │   ├── plot_config.py      plot_config — constants
@@ -50,11 +50,11 @@ TWSLT/
 ## Key Classes
 
 ```python
-from TWSLT.data.loader import DataLoader
-from TWSLT.clustering.kmeans import KMeansClusterer
-from TWSLT.clustering.super_cluster import SuperClusterer
-from TWSLT.clustering.reducer import UMAPReducer
-from TWSLT.viz.visualizer import TWSLTViz
+from SLBHS.data.loader import DataLoader
+from SLBHS.clustering.kmeans import KMeansClusterer
+from SLBHS.clustering.super_cluster import SuperClusterer
+from SLBHS.clustering.reducer import UMAPReducer
+from SLBHS.viz.visualizer import TWSLTViz
 
 # 1. Load data
 X, meta = DataLoader('/path/to/h5/files/').load()
@@ -86,4 +86,4 @@ viz.save_png('output.png', dpi=300)
 Yu-Cheng Chung
 
 ## License
-MIT
+See `LICENSE` file. Commercial use (including training commercial AI models) requires explicit prior authorization from the copyright holder. Educational and personal use do not require authorization.

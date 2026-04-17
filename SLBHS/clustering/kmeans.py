@@ -50,7 +50,7 @@ class KMeansClusterer:
 
     def fit(self, k=None, seed=None, X=None,
             init='k-means++', n_init=10, max_iter=300,
-            precompute_distances=True, algorithm='lloyd'):
+            algorithm='lloyd'):
         """
         Run K-Means clustering.
 
@@ -58,7 +58,7 @@ class KMeansClusterer:
             k: number of clusters
             seed: random seed
             X: data array (N, 63). If None, uses self.X.
-            init, n_init, max_iter: passed to sklearn KMeans
+            init, n_init, max_iter, algorithm: passed to sklearn KMeans
         Returns:
             labels: np.ndarray (N,) cluster labels
             centers: np.ndarray (k, 63) cluster centers
@@ -83,7 +83,6 @@ class KMeansClusterer:
             n_init=n_init,
             max_iter=max_iter,
             random_state=self.seed,
-            precompute_distances=precompute_distances,
             algorithm=algorithm,
         )
         km.fit(self.X_scaled_)

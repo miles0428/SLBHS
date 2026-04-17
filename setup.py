@@ -10,7 +10,7 @@ install_requires = [
 
 setup(
     name="SLBHS",
-    version="0.1.00",
+    version="0.1.01",
     packages=find_packages(where=["SLBHS"], include=["SLBHS", "SLBHS.*"]),
     package_dir={"": "."},
     install_requires=install_requires,

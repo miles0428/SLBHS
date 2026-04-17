@@ -18,7 +18,7 @@ setup(
     packages=find_packages(),
     install_requires=install_requires,
     author="Yu-Cheng Chung",
-    description="Tainan Wild Sign Language corpus — hand pose clustering and UMAP visualization.",
+    description="Sign Language Basic Handshapes — hand pose clustering and UMAP visualization.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     url="https://github.com/miles0428/SLBHS",

@@ -1,6 +1,6 @@
-# TWSLT — Tainan Wild Sign Language Corpus
+# SLBHS — Sign Language Basic Handshapes
 
-Hand pose clustering and UMAP visualization pipeline for TWSLT data.
+Hand pose clustering and UMAP visualization pipeline for sign language basic handshapes.
 
 ## Installation
 

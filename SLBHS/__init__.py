@@ -1,5 +1,6 @@
 # SLBHS — Sign Language Basic Handshapes
-__version__ = "0.1.01"
+
+__version__ = "0.1.06"
 
 from .data.loader import DataLoader
 from .clustering.kmeans import KMeansClusterer

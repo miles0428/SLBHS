@@ -4,7 +4,7 @@ KMeansClusterer: K-Means clustering of hand pose vectors with caching.
 import numpy as np
 import os
 import json
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.preprocessing import StandardScaler
 
 
@@ -83,7 +83,7 @@ class KMeansClusterer:
             n_init=n_init,
             max_iter=max_iter,
             random_state=self.seed,
-            algorithm=algorithm,
+            
         )
         km.fit(self.X_scaled_)
         self.labels_ = km.labels_
@@ -208,4 +208,60 @@ class KMeansClusterer:
             return self.labels_, self.centers_
 
         print(f'[KMeansClusterer] Loaded k={self.k} from {in_dir}')
+        return self.labels_, self.centers_
+
+    # --------------------------------------------------------------------------
+    # MiniBatch K-Means
+    # --------------------------------------------------------------------------
+
+    def fit_minibatch(self, k=None, seed=None, X=None,
+                  init='k-means++', n_init=3, max_iter=300,
+                  batch_size=5000, reassignment_ratio=0.01, max_no_improvement=10,
+                  algorithm='lloyd'):
+        """
+        Run MiniBatch K-Means clustering (faster for large datasets).
+
+        Args:
+            k: number of clusters
+            seed: random seed
+            X: data array (N, 63). If None, uses self.X.
+            init, n_init, max_iter: passed to sklearn MiniBatchKMeans
+            batch_size: size of mini-batches
+            reassignment_ratio: fraction of samples to reassign per iteration
+            max_no_improvement: stop if inertia doesn't improve for this many iterations
+            algorithm: 'lloyd' or 'elkan'
+        Returns:
+            labels: np.ndarray (N,) cluster labels
+            centers: np.ndarray (k, 63) cluster centers
+        """
+        if k is not None:
+            self.k = k
+        if seed is not None:
+            self.seed = seed
+        if X is not None:
+            self.X = X
+
+        if self.X is None:
+            raise ValueError('X must be set before fit_minibatch()')
+
+        print(f'[MiniBatchKMeans] Scaling {self.X.shape} ...')
+        self.X_scaled_ = self.scaler.fit_transform(self.X)
+
+        print(f'[MiniBatchKMeans] Fitting MiniBatchKMeans k={self.k} seed={self.seed} batch_size={batch_size} n_init={n_init} max_iter={max_iter} ...')
+        km = MiniBatchKMeans(
+            n_clusters=self.k,
+            init=init,
+            n_init=n_init,
+            max_iter=max_iter,
+            batch_size=batch_size,
+            reassignment_ratio=reassignment_ratio,
+            max_no_improvement=max_no_improvement,
+            random_state=self.seed,
+            verbose=1,
+        )
+        km.fit(self.X_scaled_)
+        self.labels_ = km.labels_
+        self.centers_ = km.cluster_centers_
+
+        print(f'[MiniBatchKMeans] Done. Inertia: {km.inertia_:.0f}')
         return self.labels_, self.centers_

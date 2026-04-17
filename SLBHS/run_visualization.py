@@ -19,12 +19,12 @@ import numpy as np
 # Add parent dir to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from data.loader import DataLoader
-from clustering.kmeans import KMeansClusterer
-from clustering.super_cluster import SuperClusterer
-from clustering.reducer import UMAPReducer
-from viz.visualizer import TWSLTViz
-from viz.plot_config import KMEANS_K, KMEANS_SEED, N_SUPER, UMAP_OVERVIEW_N, UMAP_SC_N
+from .data.loader import DataLoader
+from .clustering.kmeans import KMeansClusterer
+from .clustering.super_cluster import SuperClusterer
+from .clustering.reducer import UMAPReducer
+from .viz.visualizer import TWSLTViz
+from .viz.plot_config import KMEANS_K, KMEANS_SEED, N_SUPER, UMAP_OVERVIEW_N, UMAP_SC_N
 
 
 def parse_args():

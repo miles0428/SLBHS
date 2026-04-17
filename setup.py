@@ -1,5 +1,4 @@
-import os
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 install_requires = [
     "numpy",
@@ -9,13 +8,11 @@ install_requires = [
     "matplotlib",
 ]
 
-if os.environ.get("TWSLT_ENABLE_CUDA", "0").lower() in ("1", "true", "yes"):
-    install_requires.append("cupy")
-
 setup(
     name="SLBHS",
-    version="0.1.00",
-    packages=find_packages(),
+    version="0.1.01",
+    packages=find_packages(where=["SLBHS"], include=["SLBHS", "SLBHS.*"]),
+    package_dir={"": "."},
     install_requires=install_requires,
     author="Yu-Cheng Chung",
     description="Sign Language Basic Handshapes — hand pose clustering and UMAP visualization.",
@@ -28,4 +25,9 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.8",
+    entry_points={
+        "console_scripts": [
+            "slbhs=SLBHS.run_visualization:main",
+        ],
+    },
 )

@@ -11,7 +11,7 @@ install_requires = [
 
 setup(
     name="SLBHS",
-    version="0.1.06",
+    version="0.1.07",
     packages=["SLBHS", "SLBHS.data", "SLBHS.clustering", "SLBHS.viz"],
     package_dir={"": "."},
     install_requires=install_requires,

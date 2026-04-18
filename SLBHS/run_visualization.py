@@ -69,6 +69,7 @@ def main():
         kc = KMeansClusterer(X=X, results_dir=results_dir)
         kc.fit_minibatch(k=args.k, seed=args.seed, batch_size=args.batch_size)
         kc.save()
+        kc.save_model()  # Save sklearn model for inference
 
     labels = kc.labels_
     centers = kc.centers_

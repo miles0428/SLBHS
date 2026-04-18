@@ -277,6 +277,10 @@ class KMeansClusterer:
         if not hasattr(self, 'km') or self.km is None:
             raise RuntimeError('Must fit() with store_model=True before save_model()')
 
+        # Ensure centers are float64 to avoid dtype mismatch in predict()
+        if self.km.cluster_centers_.dtype != np.float64:
+            self.km.cluster_centers_ = self.km.cluster_centers_.astype(np.float64)
+
         out_dir = results_dir or self.results_dir
         os.makedirs(out_dir, exist_ok=True)
 
@@ -309,6 +313,7 @@ class KMeansClusterer:
         self.km = joblib.load(model_path)
         self.scaler = joblib.load(scaler_path)
         self.k = self.km.n_clusters
+        self.model_loaded = True
 
         meta_path = os.path.join(in_dir, f'{prefix}_model_meta.json')
         if os.path.exists(meta_path):
@@ -328,8 +333,11 @@ class KMeansClusterer:
         Returns:
             labels: np.ndarray (M,), cluster labels
         """
-        if not hasattr(self, 'km') or self.km is None:
+        if not getattr(self, 'model_loaded', False):
             raise RuntimeError('Must load_model() before predict()')
 
         X_new_scaled = self.scaler.transform(X_new)
+        # Ensure dtype matches for sklearn
+        if X_new_scaled.dtype != np.float64:
+            X_new_scaled = X_new_scaled.astype(np.float64)
         return self.km.predict(X_new_scaled)

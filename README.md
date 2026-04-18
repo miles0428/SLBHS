@@ -99,6 +99,20 @@ viz.plot(overview_umap=ov, overview_labels=sc.frame_super_[ov_idx])
 viz.save_png('output.png', dpi=300)
 ```
 
+## Inference (classify new data)
+
+```python
+from SLBHS.clustering.kmeans import KMeansClusterer
+
+# Load trained model
+kc = KMeansClusterer()
+kc.load_model('results')  # loads kmeans_model.joblib + kmeans_scaler.joblib
+
+# Classify new hand pose data
+new_data = np.load('new_handposes.npz')['X']  # shape (N, 63)
+labels = kc.predict(new_data)
+```
+
 ## Author
 Yu-Cheng Chung
 

@@ -43,7 +43,15 @@ def generate_samples(k, results_dir, samples_per_cluster=10, seed=42, create_zip
     # Load results
     labels = np.load(os.path.join(results_dir, 'labels.npy'))
     centers = np.load(os.path.join(results_dir, 'centers.npy'))
-    data = np.load(os.path.join(results_dir, 'aligned_63d_multi_ddbdc3ed24df9eba.npz'), allow_pickle=True)
+    # Load results - auto-detect aligned_63d_multi_*.npz
+    labels = np.load(os.path.join(results_dir, 'labels.npy'))
+    centers = np.load(os.path.join(results_dir, 'centers.npy'))
+    
+    # Find aligned_63d_multi_*.npz
+    npz_files = list(Path(results_dir).glob('aligned_63d_multi_*.npz'))
+    if not npz_files:
+        raise FileNotFoundError(f'No aligned_63d_multi_*.npz found in {results_dir}')
+    data = np.load(npz_files[0], allow_pickle=True)
     X = data['X']
 
     print(f"Labels: {len(labels)}, X: {X.shape}, Centers: {centers.shape}")

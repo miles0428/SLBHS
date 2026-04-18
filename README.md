@@ -64,16 +64,14 @@ SLBHS/
 │   ├── super_cluster.py  SuperClusterer — hierarchical clustering on centers
 │   └── reducer.py        UMAPReducer — with persistent cache
 ├── viz/
-│   ├── layout.py         GridLayout — gridspec parameters
-│   ├── plot_config.py    plot_config — constants
-│   └── visualizer.py     TWSLTViz — main plotter
-└── run_visualization.py  Pipeline entry point
-```
-
-## Key Classes
-
-```python
 from SLBHS import DataLoader, KMeansClusterer, SuperClusterer, UMAPReducer, TWSLTViz
+=======
+from SLBHS.data.loader import DataLoader
+from SLBHS.clustering.kmeans import KMeansClusterer
+from SLBHS.clustering.super_cluster import SuperClusterer
+from SLBHS.clustering.reducer import UMAPReducer
+from SLBHS.viz.visualizer import SLBHSViz
+>>>>>>> Rename TWSLTViz->SLBHSViz, add predict/save_model/load_model methods
 
 # 1. Load data
 loader = DataLoader('/path/to/h5/files/')
@@ -94,7 +92,7 @@ reducer = UMAPReducer(X_scaled, super_labels=sc.frame_super_)
 ov, ov_idx = reducer.transform_overview(n=10000)
 
 # 5. Plot
-viz = TWSLTViz(X=X_scaled, kmeans_labels=kc.labels_,
+viz = SLBHSViz(X=X_scaled, kmeans_labels=kc.labels_,
                 kmeans_centers=kc.centers_,
                 frame_super=sc.frame_super_)
 viz.plot(overview_umap=ov, overview_labels=sc.frame_super_[ov_idx])

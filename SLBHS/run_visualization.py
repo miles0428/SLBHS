@@ -9,7 +9,7 @@ Full pipeline:
     2. KMeansClusterer → fit/save k-means
     3. SuperClusterer  → hierarchical super clusters
     4. UMAPReducer     → UMAP (cached)
-    5. TWSLTViz        → plot + save
+    5. SLBHSViz        → plot + save
 """
 import argparse
 import os
@@ -23,7 +23,7 @@ from .data.loader import DataLoader
 from .clustering.kmeans import KMeansClusterer
 from .clustering.super_cluster import SuperClusterer
 from .clustering.reducer import UMAPReducer
-from .viz.visualizer import TWSLTViz
+from .viz.visualizer import SLBHSViz
 from .viz.plot_config import KMEANS_K, KMEANS_SEED, N_SUPER, UMAP_OVERVIEW_N, UMAP_SC_N
 
 
@@ -118,7 +118,7 @@ def main():
 
     # ---- 6. Visualize ----
     print('=== Step 6: Visualize ===')
-    viz = TWSLTViz(
+    viz = SLBHSViz(
         X=X_scaled, kmeans_labels=labels, kmeans_centers=centers,
         frame_super=frame_super, super_labels=super_labels,
         kmeans_meta={'k': args.k, 'seed': args.seed},

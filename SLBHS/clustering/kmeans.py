@@ -4,8 +4,10 @@ KMeansClusterer: K-Means clustering of hand pose vectors with caching.
 import numpy as np
 import os
 import json
+import joblib
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.preprocessing import StandardScaler
+from scipy.spatial.distance import cdist
 
 
 class KMeansClusterer:
@@ -77,7 +79,7 @@ class KMeansClusterer:
         self.X_scaled_ = self.scaler.fit_transform(self.X)
 
         print(f'[KMeansClusterer] Fitting K-Means k={self.k} seed={self.seed} ...')
-        km = KMeans(
+        self.km = KMeans(
             n_clusters=self.k,
             init=init,
             n_init=n_init,
@@ -85,9 +87,9 @@ class KMeansClusterer:
             random_state=self.seed,
             
         )
-        km.fit(self.X_scaled_)
-        self.labels_ = km.labels_
-        self.centers_ = km.cluster_centers_
+        self.km.fit(self.X_scaled_)
+        self.labels_ = self.km.labels_
+        self.centers_ = self.km.cluster_centers_
 
         print(f'[KMeansClusterer] Done. Inertia: {km.inertia_:.0f}')
         return self.labels_, self.centers_
@@ -96,8 +98,6 @@ class KMeansClusterer:
         """Alias for fit() then return (labels, centers)."""
         return self.fit(X=X, **kwargs)
 
-    # --------------------------------------------------------------------------
-    # Analysis
     # --------------------------------------------------------------------------
 
     def elbow(self, k_range, n_init=10, max_iter=300, seed=None):
@@ -248,7 +248,7 @@ class KMeansClusterer:
         self.X_scaled_ = self.scaler.fit_transform(self.X)
 
         print(f'[MiniBatchKMeans] Fitting MiniBatchKMeans k={self.k} seed={self.seed} batch_size={batch_size} n_init={n_init} max_iter={max_iter} ...')
-        km = MiniBatchKMeans(
+        self.km = MiniBatchKMeans(
             n_clusters=self.k,
             init=init,
             n_init=n_init,
@@ -259,9 +259,78 @@ class KMeansClusterer:
             random_state=self.seed,
             verbose=1,
         )
-        km.fit(self.X_scaled_)
-        self.labels_ = km.labels_
-        self.centers_ = km.cluster_centers_
+        self.km.fit(self.X_scaled_)
+        self.labels_ = self.km.labels_
+        self.centers_ = self.km.cluster_centers_
 
         print(f'[MiniBatchKMeans] Done. Inertia: {km.inertia_:.0f}')
         return self.labels_, self.centers_
+
+    # --------------------------------------------------------------------------
+    # Model Save / Load (for inference)
+    # --------------------------------------------------------------------------
+
+    def save_model(self, results_dir=None, prefix='kmeans'):
+        """
+        Save sklearn model (KMeans + StandardScaler) for inference.
+        Use load_model() to load and predict() to classify new data.
+        """
+        if not hasattr(self, 'km') or self.km is None:
+            raise RuntimeError('Must fit() with store_model=True before save_model()')
+
+        out_dir = results_dir or self.results_dir
+        os.makedirs(out_dir, exist_ok=True)
+
+        model_path = os.path.join(out_dir, f'{prefix}_model.joblib')
+        scaler_path = os.path.join(out_dir, f'{prefix}_scaler.joblib')
+
+        joblib.dump(self.km, model_path)
+        joblib.dump(self.scaler, scaler_path)
+
+        meta = {
+            'k': int(self.k),
+            'seed': int(self.seed),
+            'model_type': type(self.km).__name__,
+        }
+        meta_path = os.path.join(out_dir, f'{prefix}_model_meta.json')
+        with open(meta_path, 'w') as f:
+            json.dump(meta, f, indent=2)
+
+        print(f'[KMeansClusterer] Saved model to {out_dir}')
+        return {'model': model_path, 'scaler': scaler_path}
+
+    def load_model(self, results_dir=None, prefix='kmeans'):
+        """
+        Load sklearn model for inference. After loading, use predict().
+        """
+        in_dir = results_dir or self.results_dir
+        model_path = os.path.join(in_dir, f'{prefix}_model.joblib')
+        scaler_path = os.path.join(in_dir, f'{prefix}_scaler.joblib')
+
+        self.km = joblib.load(model_path)
+        self.scaler = joblib.load(scaler_path)
+        self.k = self.km.n_clusters
+
+        meta_path = os.path.join(in_dir, f'{prefix}_model_meta.json')
+        if os.path.exists(meta_path):
+            with open(meta_path) as f:
+                meta = json.load(f)
+            self.seed = meta.get('seed', 42)
+
+        print(f'[KMeansClusterer] Loaded model (k={self.k}) from {in_dir}')
+
+    def predict(self, X_new):
+        """
+        Predict cluster labels for new data.
+        Requires load_model() or fit() with store_model=True first.
+
+        Args:
+            X_new: np.ndarray (M, 63), new hand pose vectors
+        Returns:
+            labels: np.ndarray (M,), cluster labels
+        """
+        if not hasattr(self, 'km') or self.km is None:
+            raise RuntimeError('Must load_model() before predict()')
+
+        X_new_scaled = self.scaler.transform(X_new)
+        return self.km.predict(X_new_scaled)

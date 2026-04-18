@@ -1,5 +1,8 @@
 from setuptools import find_packages, setup
 
+# Read version from single source
+exec(open("SLBHS/version.py").read())
+
 install_requires = [
     "numpy>=1.24.0",
     "scikit-learn==1.3.2",
@@ -11,7 +14,7 @@ install_requires = [
 
 setup(
     name="SLBHS",
-    version="0.1.06",
+    version=__version__,
     packages=["SLBHS", "SLBHS.data", "SLBHS.clustering", "SLBHS.viz"],
     package_dir={"": "."},
     install_requires=install_requires,

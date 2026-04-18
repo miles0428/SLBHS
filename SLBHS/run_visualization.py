@@ -40,6 +40,7 @@ def parse_args():
     parser.add_argument('--skip-kmeans', action='store_true', help='Skip K-Means (load existing)')
     parser.add_argument('--skip-super', action='store_true', help='Skip super clustering')
     parser.add_argument('--skip-umap', action='store_true', help='Skip UMAP computation')
+    parser.add_argument('--n-neighbors', type=int, default=30, help='UMAP n_neighbors')
     return parser.parse_args()
 
 
@@ -104,11 +105,11 @@ def main():
         sc_umaps = {}
     else:
         print(f'=== Step 5: UMAP (overview n={UMAP_OVERVIEW_N}, sc n={UMAP_SC_N}) ===')
-        overview_umap, ov_idx = reducer.transform_overview(n=UMAP_OVERVIEW_N, seed=args.seed)
+        overview_umap, ov_idx = reducer.transform_overview(n=UMAP_OVERVIEW_N, seed=args.seed, n_neighbors=args.n_neighbors)
         overview_labels = frame_super[ov_idx]
         sc_umaps = {}
         for s in range(args.n_super):
-            sc_umap, sc_umap_idx = reducer.transform_sc(sc_id=s, n=UMAP_SC_N, seed=args.seed)
+            sc_umap, sc_umap_idx = reducer.transform_sc(sc_id=s, n=UMAP_SC_N, seed=args.seed, n_neighbors=args.n_neighbors)
             sc_mask = frame_super == s
             sc_indices = np.where(sc_mask)[0]
             sc_frame_labels = labels[sc_indices[sc_umap_idx]]

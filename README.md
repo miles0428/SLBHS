@@ -22,46 +22,66 @@ pip install .
 
 ```bash
 # Full pipeline: load data → K-Means → SuperCluster → UMAP → plot → save
-python run_visualization.py --k 512 --n-super 20 --format both
+python -m SLBHS.run_visualization --k 512 --n-super 20 --format both
 
 # Skip K-Means and SuperCluster (load cached results)
-python run_visualization.py --skip-kmeans --skip-super
+python -m SLBHS.run_visualization --skip-kmeans --skip-super
 
 # Customize UMAP sampling
-python run_visualization.py --k 512 --n-super 20 --overview-n 10000 --sc-n 2000
+python -m SLBHS.run_visualization --k 512 --n-super 20 --overview-n 10000 --sc-n 2000
+
+# Customize n_neighbors for UMAP (default: 30)
+python -m SLBHS.run_visualization --k 512 --n-neighbors 10
 ```
+
+## CLI Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--k` | 512 | K-Means number of clusters |
+| `--n-super` | 20 | Number of super clusters |
+| `--batch-size` | 5000 | MiniBatch K-Means batch size |
+| `--n-neighbors` | 30 | UMAP n_neighbors parameter |
+| `--seed` | 42 | Random seed |
+| `--data-dir` | . | H5 data directory |
+| `--results-dir` | results | Results directory |
+| `--dpi` | 300 | PNG DPI |
+| `--format` | png | Output format: png, svg, or both |
+| `--skip-kmeans` | - | Skip K-Means (load cached) |
+| `--skip-super` | - | Skip SuperCluster (load cached) |
+| `--skip-umap` | - | Skip UMAP computation (load cached) |
 
 ## Architecture
 
 ```
 SLBHS/
-├── data/loader.py          DataLoader — H5 reader (multi-file concat + cache)
+├── __init__.py           Package init (exports all classes)
+├── version.py            Single source of truth for version
+├── data/
+│   └── loader.py         DataLoader — H5 reader (multi-file concat + cache)
 ├── clustering/
-│   ├── kmeans.py           KMeansClusterer — fit/save/elbow/silhouette
-│   ├── super_cluster.py    SuperClusterer — hierarchical clustering on centers
-│   └── reducer.py          UMAPReducer — with persistent cache
+│   ├── kmeans.py         KMeansClusterer — MiniBatchKMeans fit/save
+│   ├── super_cluster.py  SuperClusterer — hierarchical clustering on centers
+│   └── reducer.py        UMAPReducer — with persistent cache
 ├── viz/
-│   ├── layout.py           GridLayout — gridspec parameters
-│   ├── plot_config.py      plot_config — constants
-│   └── visualizer.py       TWSLTViz — main plotter
-└── run_visualization.py    pipeline entry point
+│   ├── layout.py         GridLayout — gridspec parameters
+│   ├── plot_config.py    plot_config — constants
+│   └── visualizer.py     TWSLTViz — main plotter
+└── run_visualization.py  Pipeline entry point
 ```
 
 ## Key Classes
 
 ```python
-from SLBHS.data.loader import DataLoader
-from SLBHS.clustering.kmeans import KMeansClusterer
-from SLBHS.clustering.super_cluster import SuperClusterer
-from SLBHS.clustering.reducer import UMAPReducer
-from SLBHS.viz.visualizer import TWSLTViz
+from SLBHS import DataLoader, KMeansClusterer, SuperClusterer, UMAPReducer, TWSLTViz
 
 # 1. Load data
-X, meta = DataLoader('/path/to/h5/files/').load()
+loader = DataLoader('/path/to/h5/files/')
+X, meta = loader.load()
 
-# 2. K-Means
+# 2. K-Means (MiniBatch)
 kc = KMeansClusterer(X, results_dir='results')
-kc.fit(k=512); kc.save()
+kc.fit(k=512, batch_size=5000); kc.save()
 
 # 3. SuperCluster
 sc = SuperClusterer(kc.labels_, kc.centers_)
@@ -78,7 +98,6 @@ viz = TWSLTViz(X=X_scaled, kmeans_labels=kc.labels_,
                 kmeans_centers=kc.centers_,
                 frame_super=sc.frame_super_)
 viz.plot(overview_umap=ov, overview_labels=sc.frame_super_[ov_idx])
-viz.save_svg('output.svg')
 viz.save_png('output.png', dpi=300)
 ```
 

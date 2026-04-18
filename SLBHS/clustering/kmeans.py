@@ -7,7 +7,6 @@ import json
 import joblib
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.preprocessing import StandardScaler
-from scipy.spatial.distance import cdist
 
 
 class KMeansClusterer:

@@ -88,6 +88,8 @@ class KMeansClusterer:
         )
         self.km.fit(self.X_scaled_)
         self.labels_ = self.km.labels_
+        # Ensure centers are float64 to avoid dtype mismatch in predict()
+        self.km.cluster_centers_ = self.km.cluster_centers_.astype(np.float64)
         self.centers_ = self.km.cluster_centers_
 
         print(f'[KMeansClusterer] Done. Inertia: {self.km.inertia_:.0f}')
@@ -260,6 +262,8 @@ class KMeansClusterer:
         )
         self.km.fit(self.X_scaled_)
         self.labels_ = self.km.labels_
+        # Ensure centers are float64 to avoid dtype mismatch in predict()
+        self.km.cluster_centers_ = self.km.cluster_centers_.astype(np.float64)
         self.centers_ = self.km.cluster_centers_
 
         print(f'[MiniBatchKMeans] Done. Inertia: {self.km.inertia_:.0f}')
@@ -326,15 +330,20 @@ class KMeansClusterer:
     def predict(self, X_new):
         """
         Predict cluster labels for new data.
-        Requires load_model() or fit() with store_model=True first.
+        Requires load_model() OR fit()/fit_minibatch() first.
 
         Args:
             X_new: np.ndarray (M, 63), new hand pose vectors
         Returns:
             labels: np.ndarray (M,), cluster labels
         """
-        if not getattr(self, 'model_loaded', False):
-            raise RuntimeError('Must load_model() before predict()')
+        # Check if model is available (from load_model or fit/fit_minibatch)
+        has_model = (
+            getattr(self, 'model_loaded', False) or
+            (hasattr(self, 'km') and self.km is not None and hasattr(self, 'scaler') and self.scaler is not None)
+        )
+        if not has_model:
+            raise RuntimeError('Must call load_model() or fit()/fit_minibatch() before predict()')
 
         X_new_scaled = self.scaler.transform(X_new)
         # Ensure dtype matches for sklearn

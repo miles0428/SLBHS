@@ -65,7 +65,8 @@ def generate_samples(k, results_dir, samples_per_cluster=10, seed=42, create_zip
     for f in output_dir.glob('*.png'):
         try:
             existing.add(int(f.stem.split('_')[1]))
-        except:
+        except (ValueError, IndexError):
+            # Skip files with unexpected naming format
             pass
 
     print(f"Existing: {len(existing)}/{k} clusters")

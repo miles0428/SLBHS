@@ -91,7 +91,7 @@ class KMeansClusterer:
         self.labels_ = self.km.labels_
         self.centers_ = self.km.cluster_centers_
 
-        print(f'[KMeansClusterer] Done. Inertia: {km.inertia_:.0f}')
+        print(f'[KMeansClusterer] Done. Inertia: {self.km.inertia_:.0f}')
         return self.labels_, self.centers_
 
     def fit_transform(self, X=None, **kwargs):

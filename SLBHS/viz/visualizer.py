@@ -181,15 +181,17 @@ class SLBHSViz:
             # Support both old format (just coords) and new format (coords, labels)
             if isinstance(entry, tuple) and len(entry) == 2:
                 umap_sc, labels_sc = entry
-                # Ensure labels match umap points (handle mismatched sizes)
-                if len(umap_sc) != len(labels_sc):
-                    labels_sc = labels_sc[:len(umap_sc)]
+                # Ensure UMAP points and labels have matching lengths
+                min_len = min(len(umap_sc), len(labels_sc))
+                umap_sc = umap_sc[:min_len]
+                labels_sc = labels_sc[:min_len]
             else:
                 umap_sc = entry
                 labels_sc = self.kmeans_labels[self.frame_super == sc_id]
-                # Ensure labels match umap points
-                if len(umap_sc) != len(labels_sc):
-                    labels_sc = labels_sc[:len(umap_sc)]
+                # Ensure UMAP points and labels have matching lengths
+                min_len = min(len(umap_sc), len(labels_sc))
+                umap_sc = umap_sc[:min_len]
+                labels_sc = labels_sc[:min_len]
 
             if len(umap_sc) == 0:
                 ax.set_title(f'SC {sc_id} ({n_frames_total} fr)', fontsize=SC_TITLE_SIZE)

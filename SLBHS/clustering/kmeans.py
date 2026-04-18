@@ -262,7 +262,7 @@ class KMeansClusterer:
         self.labels_ = self.km.labels_
         self.centers_ = self.km.cluster_centers_
 
-        print(f'[MiniBatchKMeans] Done. Inertia: {km.inertia_:.0f}')
+        print(f'[MiniBatchKMeans] Done. Inertia: {self.km.inertia_:.0f}')
         return self.labels_, self.centers_
 
     # --------------------------------------------------------------------------

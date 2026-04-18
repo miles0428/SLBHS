@@ -64,14 +64,13 @@ SLBHS/
 │   ├── super_cluster.py  SuperClusterer — hierarchical clustering on centers
 │   └── reducer.py        UMAPReducer — with persistent cache
 ├── viz/
-from SLBHS import DataLoader, KMeansClusterer, SuperClusterer, UMAPReducer, TWSLTViz
-=======
+
 from SLBHS.data.loader import DataLoader
 from SLBHS.clustering.kmeans import KMeansClusterer
 from SLBHS.clustering.super_cluster import SuperClusterer
 from SLBHS.clustering.reducer import UMAPReducer
 from SLBHS.viz.visualizer import SLBHSViz
->>>>>>> Rename TWSLTViz->SLBHSViz, add predict/save_model/load_model methods
+
 
 # 1. Load data
 loader = DataLoader('/path/to/h5/files/')

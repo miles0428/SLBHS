@@ -117,4 +117,15 @@ labels = kc.predict(new_data)
 Yu-Cheng Chung
 
 ## License
-See `LICENSE` file. Commercial use (including training commercial AI models) requires explicit prior authorization from the copyright holder. Educational and personal use do not require authorization.
+See `LICENSE` file. 
+
+This project is released for research purposes only.
+
+You are allowed to:
+- use the code to train your own models
+
+You are NOT allowed to:
+- use any pretrained model or outputs to train other models
+- use this work in commercial settings
+
+Commercial licensing is available upon request.

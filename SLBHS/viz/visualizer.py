@@ -1,5 +1,5 @@
 """
-visualizer.py — TWSLTViz: main plotting class for TWSLT UMAP + super cluster visualizations.
+visualizer.py — SLBHSViz: main plotting class for TWSLT UMAP + super cluster visualizations.
 """
 import numpy as np
 import matplotlib
@@ -18,12 +18,12 @@ from .plot_config import (
 )
 
 
-class TWSLTViz:
+class SLBHSViz:
     """
     Main visualization class for TWSLT data.
 
     Usage:
-        viz = TWSLTViz(
+        viz = SLBHSViz(
             X=aligned_63d,                     # (N, 63)
             kmeans_labels=labels,               # (N,) cluster labels
             kmeans_centers=centers,             # (k, 63)
@@ -224,7 +224,7 @@ class TWSLTViz:
         if self.fig is None:
             raise RuntimeError('Must call plot() first')
         self.fig.savefig(path, dpi=dpi, bbox_inches=bbox_inches)
-        print(f'[TWSLTViz] Saved figure to {path}')
+        print(f'[SLBHSViz] Saved figure to {path}')
 
     def save_svg(self, path):
         """Save as SVG."""
@@ -241,9 +241,9 @@ class TWSLTViz:
             cairosvg.svg2png(url=tmp_svg, write_to=path, dpi=dpi)
             os.remove(tmp_svg)
             size_mb = os.path.getsize(path) / 1024**2
-            print(f'[TWSLTViz] Saved PNG via cairosvg to {path} ({size_mb:.1f} MB)')
+            print(f'[SLBHSViz] Saved PNG via cairosvg to {path} ({size_mb:.1f} MB)')
         except ImportError:
-            print('[TWSLTViz] cairosvg not found, using matplotlib direct save')
+            print('[SLBHSViz] cairosvg not found, using matplotlib direct save')
             self.save_fig(path, dpi=dpi)
 
     # --------------------------------------------------------------------------
@@ -263,7 +263,7 @@ class TWSLTViz:
             n_super, seed, overview_n, sc_n: UMAP parameters
 
         Returns:
-            TWSLTViz instance (with plot() called but not yet saved)
+            SLBHSViz instance (with plot() called but not yet saved)
         """
         import json
         import os, sys

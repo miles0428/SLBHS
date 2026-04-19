@@ -35,8 +35,8 @@ def main():
     for f in output_dir.glob('*.png'):
         try:
             existing.add(int(f.stem.split('_')[1]))
-        except:
-            pass
+        except (ValueError, IndexError):
+            print(f"Skipping unexpected filename format: {f.name}")
 
     print(f"Existing: {len(existing)}/1024")
     

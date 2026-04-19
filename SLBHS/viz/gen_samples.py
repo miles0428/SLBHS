@@ -40,10 +40,7 @@ def parse_args():
 def generate_samples(k, results_dir, samples_per_cluster=10, seed=42, create_zip=False):
     """Generate sample images for each cluster."""
     
-    # Load results
-    labels = np.load(os.path.join(results_dir, 'labels.npy'))
-    centers = np.load(os.path.join(results_dir, 'centers.npy'))
-    # Load results - auto-detect aligned_63d_multi_*.npz
+    # Load clustering results
     labels = np.load(os.path.join(results_dir, 'labels.npy'))
     centers = np.load(os.path.join(results_dir, 'centers.npy'))
     

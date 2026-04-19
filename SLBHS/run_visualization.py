@@ -69,6 +69,7 @@ def main():
         kc = KMeansClusterer(X=X, results_dir=results_dir)
         kc.fit_minibatch(k=args.k, seed=args.seed, batch_size=args.batch_size)
         kc.save()
+        kc.save_model()  # Save sklearn model for inference
 
     labels = kc.labels_
     centers = kc.centers_
@@ -106,7 +107,7 @@ def main():
         overview_labels = None
         sc_umaps = {}
     else:
-        print(f'=== Step 5: UMAP (overview n={UMAP_OVERVIEW_N}, sc n={UMAP_SC_N}) ===')
+        print(f'=== Step 5: UMAP (overview n={args.overview_umap_n}, sc n={args.sc_umap_n}) ===')
         overview_umap, ov_idx = reducer.transform_overview(n=args.overview_umap_n, seed=args.seed, n_neighbors=args.n_neighbors)
         overview_labels = frame_super[ov_idx]
         sc_umaps = {}

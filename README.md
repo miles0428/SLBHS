@@ -51,53 +51,7 @@ python -m SLBHS.run_visualization --k 512 --n-neighbors 10
 | `--skip-super` | - | Skip SuperCluster (load cached) |
 | `--skip-umap` | - | Skip UMAP computation (load cached) |
 
-## Architecture
 
-```
-SLBHS/
-├── __init__.py           Package init (exports all classes)
-├── version.py            Single source of truth for version
-├── data/
-│   └── loader.py         DataLoader — H5 reader (multi-file concat + cache)
-├── clustering/
-│   ├── kmeans.py         KMeansClusterer — MiniBatchKMeans fit/save
-│   ├── super_cluster.py  SuperClusterer — hierarchical clustering on centers
-│   └── reducer.py        UMAPReducer — with persistent cache
-├── viz/
-from SLBHS import DataLoader, KMeansClusterer, SuperClusterer, UMAPReducer, TWSLTViz
-=======
-from SLBHS.data.loader import DataLoader
-from SLBHS.clustering.kmeans import KMeansClusterer
-from SLBHS.clustering.super_cluster import SuperClusterer
-from SLBHS.clustering.reducer import UMAPReducer
-from SLBHS.viz.visualizer import SLBHSViz
->>>>>>> Rename TWSLTViz->SLBHSViz, add predict/save_model/load_model methods
-
-# 1. Load data
-loader = DataLoader('/path/to/h5/files/')
-X, meta = loader.load()
-
-# 2. K-Means (MiniBatch)
-kc = KMeansClusterer(X, results_dir='results')
-kc.fit(k=512, batch_size=5000); kc.save()
-
-# 3. SuperCluster
-sc = SuperClusterer(kc.labels_, kc.centers_)
-sc.fit(n_super=20); sc.save()
-
-# 4. UMAP (cached)
-from sklearn.preprocessing import StandardScaler
-X_scaled = StandardScaler().fit_transform(X)
-reducer = UMAPReducer(X_scaled, super_labels=sc.frame_super_)
-ov, ov_idx = reducer.transform_overview(n=10000)
-
-# 5. Plot
-viz = SLBHSViz(X=X_scaled, kmeans_labels=kc.labels_,
-                kmeans_centers=kc.centers_,
-                frame_super=sc.frame_super_)
-viz.plot(overview_umap=ov, overview_labels=sc.frame_super_[ov_idx])
-viz.save_png('output.png', dpi=300)
-```
 
 ## Inference (classify new data)
 

@@ -18,13 +18,29 @@ MEDIAPIPE_CONNECTIONS = [
     (17, 18), (18, 19), (19, 20),
 ]
 
+def find_aligned_npz(results_dir='results'):
+    results_path = Path(results_dir)
+    matches = sorted(
+        results_path.glob('aligned_63d_multi_*.npz'),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not matches:
+        raise FileNotFoundError(
+            f"No aligned cache file found in {results_path!s} matching "
+            "'aligned_63d_multi_*.npz'"
+        )
+    return matches[0]
+
 def main():
     # Load results
     labels = np.load('results/labels.npy')
     centers = np.load('results/centers.npy')
-    data = np.load('results/aligned_63d_multi_ddbdc3ed24df9eba.npz', allow_pickle=True)
+    aligned_npz_path = find_aligned_npz()
+    data = np.load(aligned_npz_path, allow_pickle=True)
     X = data['X']
 
+    print(f"Using aligned data: {aligned_npz_path}")
     print(f"Labels: {len(labels)}, X: {X.shape}, Centers: {centers.shape}")
 
     # Check existing files

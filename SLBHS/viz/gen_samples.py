@@ -44,10 +44,16 @@ def generate_samples(k, results_dir, samples_per_cluster=10, seed=42, create_zip
     labels = np.load(os.path.join(results_dir, 'labels.npy'))
     centers = np.load(os.path.join(results_dir, 'centers.npy'))
     
-    # Find aligned_63d_multi_*.npz
-    npz_files = list(Path(results_dir).glob('aligned_63d_multi_*.npz'))
+    # Find aligned_63d_multi_*.npz deterministically and reject ambiguity
+    npz_files = sorted(Path(results_dir).glob('aligned_63d_multi_*.npz'), key=lambda p: p.name)
     if not npz_files:
         raise FileNotFoundError(f'No aligned_63d_multi_*.npz found in {results_dir}')
+    if len(npz_files) > 1:
+        matches = ', '.join(str(path.name) for path in npz_files)
+        raise RuntimeError(
+            f'Multiple aligned_63d_multi_*.npz files found in {results_dir}: {matches}. '
+            'Please keep only one matching dataset file in the results directory.'
+        )
     data = np.load(npz_files[0], allow_pickle=True)
     X = data['X']
 

@@ -10,6 +10,7 @@ install_requires = [
     "umap-learn==0.5.6",  # 0.5.8+ incompatible with scikit-learn 1.3.2
     "matplotlib>=3.7.0",
     "scipy",
+    "tqdm",
 ]
 
 setup(

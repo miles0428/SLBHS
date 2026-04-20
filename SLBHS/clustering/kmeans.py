@@ -7,9 +7,7 @@ import json
 import joblib
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.preprocessing import StandardScaler
-from tqdm import tqdm
 import warnings
-warnings.filterwarnings('ignore', category=FutureWarning)
 
 
 class KMeansClusterer:
@@ -54,7 +52,7 @@ class KMeansClusterer:
 
     def fit(self, k=None, seed=None, X=None,
             init='k-means++', n_init=10, max_iter=300,
-            algorithm='lloyd', verbose_progress=True):
+            verbose_progress=True):
         """
         Run K-Means clustering.
 
@@ -62,8 +60,8 @@ class KMeansClusterer:
             k: number of clusters
             seed: random seed
             X: data array (N, 63). If None, uses self.X.
-            init, n_init, max_iter, algorithm: passed to sklearn KMeans
-            verbose_progress: if True, show progress bar + convergence report
+            init, n_init, max_iter: passed to sklearn KMeans
+            verbose_progress: if True, show per-iteration progress logs
         Returns:
             labels: np.ndarray (N,) cluster labels
             centers: np.ndarray (k, 63) cluster centers
@@ -95,7 +93,10 @@ class KMeansClusterer:
         self.km.fit(self.X_scaled_)
 
         if verbose_progress:
-            print(f'[KMeansClusterer] Converged in {self.km.n_iter_} iterations')
+            if self.km.n_iter_ < max_iter:
+                print(f'[KMeansClusterer] Converged in {self.km.n_iter_} iterations')
+            else:
+                print(f'[KMeansClusterer] Finished after {self.km.n_iter_} iterations (reached max_iter={max_iter})')
 
         self.labels_ = self.km.labels_
         # Ensure centers are float64 to avoid dtype mismatch in predict()
@@ -228,7 +229,7 @@ class KMeansClusterer:
     def fit_minibatch(self, k=None, seed=None, X=None,
                   init='k-means++', n_init=3, max_iter=300,
                   batch_size=5000, reassignment_ratio=0.01, max_no_improvement=10,
-                  algorithm='lloyd', verbose_progress=True):
+                  verbose_progress=True):
         """
         Run MiniBatch K-Means clustering (faster for large datasets).
 
@@ -240,8 +241,7 @@ class KMeansClusterer:
             batch_size: size of mini-batches
             reassignment_ratio: fraction of samples to reassign per iteration
             max_no_improvement: stop if inertia doesn't improve for this many iterations
-            algorithm: 'lloyd' or 'elkan'
-            verbose_progress: if True, show progress bar + convergence report
+            verbose_progress: if True, show per-iteration progress logs
         Returns:
             labels: np.ndarray (N,) cluster labels
             centers: np.ndarray (k, 63) cluster centers
@@ -276,7 +276,10 @@ class KMeansClusterer:
         self.km.fit(self.X_scaled_)
 
         if verbose_progress:
-            print(f'[MiniBatchKMeans] Converged in {self.km.n_iter_} iterations')
+            if self.km.n_iter_ < max_iter:
+                print(f'[MiniBatchKMeans] Converged in {self.km.n_iter_} iterations')
+            else:
+                print(f'[MiniBatchKMeans] Finished after {self.km.n_iter_} iterations (reached max_iter={max_iter})')
 
         self.labels_ = self.km.labels_
         # Ensure centers are float64 to avoid dtype mismatch in predict()

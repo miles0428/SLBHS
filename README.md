@@ -50,7 +50,7 @@ python -m SLBHS.run_visualization --k 512 --n-neighbors 10
 | `--skip-kmeans` | - | Skip K-Means (load cached) |
 | `--skip-super` | - | Skip SuperCluster (load cached) |
 | `--skip-umap` | - | Skip UMAP computation (load cached) |
-| `--verbose` | True | Show K-Means iteration progress |
+| `--no-verbose` | - | Suppress K-Means iteration progress |
 
 
 

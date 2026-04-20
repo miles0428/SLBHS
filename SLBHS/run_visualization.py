@@ -44,6 +44,7 @@ def parse_args():
     parser.add_argument('--overview-umap-n', type=int, default=UMAP_OVERVIEW_N, help='UMAP overview sample size')
     parser.add_argument('--sc-umap-n', type=int, default=UMAP_SC_N, help='UMAP per-supercluster sample size')
     parser.add_argument('--verbose', action='store_true', default=True, help='Show K-Means progress')
+    parser.add_argument('--no-verbose', dest='verbose', action='store_false', help='Suppress K-Means progress')
     return parser.parse_args()
 
 

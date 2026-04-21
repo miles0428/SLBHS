@@ -98,6 +98,8 @@ def main():
     from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
+    # Free raw X immediately — not needed after scaling
+    del X
 
     # ---- 5. UMAP ----
     reducer = UMAPReducer(X_scaled, super_labels=frame_super, cache_dir=results_dir)
@@ -119,11 +121,13 @@ def main():
             sc_frame_labels = labels[sc_indices[sc_umap_idx]]
             sc_umaps[s] = (sc_umap, sc_frame_labels)
             print(f'  SC {s}: {len(sc_umap)} UMAP points')
+        # Free X_scaled and reducer immediately — not needed after UMAP
+        del X_scaled, reducer
 
     # ---- 6. Visualize ----
     print('=== Step 6: Visualize ===')
     viz = SLBHSViz(
-        X=X_scaled, kmeans_labels=labels, kmeans_centers=centers,
+        kmeans_labels=labels, kmeans_centers=centers,
         frame_super=frame_super, super_labels=super_labels,
         kmeans_meta={'k': args.k, 'seed': args.seed},
         super_meta={'n_super': args.n_super},

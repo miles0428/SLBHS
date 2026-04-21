@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument('--n-neighbors', type=int, default=30, help='UMAP n_neighbors')
     parser.add_argument('--overview-umap-n', type=int, default=UMAP_OVERVIEW_N, help='UMAP overview sample size')
     parser.add_argument('--sc-umap-n', type=int, default=UMAP_SC_N, help='UMAP per-supercluster sample size')
+    parser.add_argument('--no-verbose', dest='verbose', action='store_false', help='Suppress K-Means progress')
     return parser.parse_args()
 
 
@@ -67,7 +68,7 @@ def main():
     else:
         print(f'=== Step 2: MiniBatch K-Means k={args.k} batch_size={args.batch_size} ===')
         kc = KMeansClusterer(X=X, results_dir=results_dir)
-        kc.fit_minibatch(k=args.k, seed=args.seed, batch_size=args.batch_size)
+        kc.fit_minibatch(k=args.k, seed=args.seed, batch_size=args.batch_size, verbose_progress=args.verbose)
         kc.save()
         kc.save_model()  # Save sklearn model for inference
 

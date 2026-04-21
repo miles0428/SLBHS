@@ -34,13 +34,12 @@ class SLBHSViz:
         viz.save_png('/tmp/out.png', dpi=300)
     """
 
-    def __init__(self, X=None, kmeans_labels=None, kmeans_centers=None,
+    def __init__(self, kmeans_labels=None, kmeans_centers=None,
                  super_labels=None, frame_super=None,
                  kmeans_meta=None, super_meta=None,
                  fig_width=FIG_WIDTH, fig_height=FIG_HEIGHT):
         """
         Args:
-            X: np.ndarray (N, 63) — raw or scaled data
             kmeans_labels: np.ndarray (N,) — K-Means cluster ID per frame
             kmeans_centers: np.ndarray (k, 63) — K-Means centers
             super_labels: np.ndarray (k,) — super cluster per center, OR
@@ -49,7 +48,6 @@ class SLBHSViz:
             super_meta: dict with 'n_super'
             fig_width, fig_height: figure dimensions in inches
         """
-        self.X = X
         self.kmeans_labels = kmeans_labels
         self.kmeans_centers = kmeans_centers
         self.kmeans_meta = kmeans_meta or {}

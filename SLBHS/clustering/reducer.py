@@ -65,7 +65,7 @@ class UMAPReducer:
         cache = self._load_cache('overview', n=n, seed=seed,
                                  n_neighbors=n_neighbors, min_dist=min_dist)
         if cache is not None:
-            # Cache stores only coords; return with synthetic indices
+            # Cache stores only coords; reconstruct indices from seed
             n_actual = len(cache)
             np.random.seed(seed)
             all_idx = np.random.choice(len(self.X), min(n, len(self.X)), replace=False)
@@ -73,6 +73,7 @@ class UMAPReducer:
 
         np.random.seed(seed)
         idx = np.random.choice(len(self.X), min(n, len(self.X)), replace=False)
+        X_sub = self.X[idx]
 
         reducer = umap.UMAP(
             n_components=2,
@@ -80,7 +81,9 @@ class UMAPReducer:
             n_neighbors=n_neighbors,
             min_dist=min_dist,
         )
-        result = reducer.fit_transform(self.X[idx])
+        result = reducer.fit_transform(X_sub)
+        # Free reducer immediately after fit_transform
+        del reducer
         self._save_cache(result, 'overview', n=n, seed=seed,
                         n_neighbors=n_neighbors, min_dist=min_dist)
         return result, idx
@@ -116,6 +119,9 @@ class UMAPReducer:
 
         np.random.seed(seed)
         idx = np.random.choice(len(X_sc), n_actual, replace=False)
+        X_sub = X_sc[idx]
+        # Free X_sc — only need the subsample for UMAP
+        del X_sc
 
         reducer = umap.UMAP(
             n_components=2,
@@ -123,7 +129,10 @@ class UMAPReducer:
             n_neighbors=min(n_neighbors, n_actual - 1),
             min_dist=min_dist,
         )
-        result = reducer.fit_transform(X_sc[idx])
+        result = reducer.fit_transform(X_sub)
+        # Free reducer immediately
+        del reducer
+        del X_sub
         self._save_cache(result, f'sc{sc_id:02d}', n=n, seed=seed,
                          n_neighbors=n_neighbors, min_dist=min_dist)
         return result, idx

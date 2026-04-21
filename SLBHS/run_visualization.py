@@ -93,22 +93,25 @@ def main():
     super_labels = sc.super_labels_
     print(f'  Super clusters done: {sc.n_super_} super clusters')
 
-    # ---- 4. Scale X ----
+    # ---- 4. Scale X + Build UMAP Reducer ----
     print('=== Step 4: Scale data ===')
     from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
+    # Free raw X immediately — not needed after scaling
+    del X
 
     # ---- 5. UMAP ----
-    reducer = UMAPReducer(X_scaled, super_labels=frame_super, cache_dir=results_dir)
-
     if args.skip_umap:
         print('=== Step 5: Skip UMAP ===')
         overview_umap = None
         overview_labels = None
         sc_umaps = {}
+        # X_scaled no longer needed — free it
+        del X_scaled
     else:
         print(f'=== Step 5: UMAP (overview n={args.overview_umap_n}, sc n={args.sc_umap_n}) ===')
+        reducer = UMAPReducer(X_scaled, super_labels=frame_super, cache_dir=results_dir)
         overview_umap, ov_idx = reducer.transform_overview(n=args.overview_umap_n, seed=args.seed, n_neighbors=args.n_neighbors)
         overview_labels = frame_super[ov_idx]
         sc_umaps = {}
@@ -119,11 +122,13 @@ def main():
             sc_frame_labels = labels[sc_indices[sc_umap_idx]]
             sc_umaps[s] = (sc_umap, sc_frame_labels)
             print(f'  SC {s}: {len(sc_umap)} UMAP points')
+        # Free X_scaled and reducer immediately — not needed after UMAP
+        del X_scaled, reducer
 
     # ---- 6. Visualize ----
     print('=== Step 6: Visualize ===')
     viz = SLBHSViz(
-        X=X_scaled, kmeans_labels=labels, kmeans_centers=centers,
+        kmeans_labels=labels, kmeans_centers=centers,
         frame_super=frame_super, super_labels=super_labels,
         kmeans_meta={'k': args.k, 'seed': args.seed},
         super_meta={'n_super': args.n_super},

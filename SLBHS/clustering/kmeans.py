@@ -229,6 +229,7 @@ class KMeansClusterer:
     # --------------------------------------------------------------------------
 
     def fit_minibatch(self, k=None, seed=None, X=None,
+            init='k-means++', n_init=3, max_iter=300,
             batch_size=5000, reassignment_ratio=0.01, max_no_improvement=10,
             verbose_progress=True):
         """

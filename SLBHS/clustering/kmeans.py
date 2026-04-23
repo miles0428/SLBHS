@@ -326,6 +326,11 @@ class KMeansClusterer:
 
         if getattr(self, 'X_combined', None) is None:
             raise ValueError('X_combined (N, 78) must be set before fit_cosine_minibatch()')
+        if self.X_combined.ndim != 2 or self.X_combined.shape[1] != 78:
+            raise ValueError(
+                f'X_combined must have shape (N, 78) before fit_cosine_minibatch(); '
+                f'got shape {self.X_combined.shape}'
+            )
 
         print(f'[CosineMiniBatchKMeans] Fitting on {self.X_combined.shape} (raw+cosine) ...')
         self.km = MiniBatchKMeans(

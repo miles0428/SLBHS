@@ -93,4 +93,8 @@ def compute_cosine_features(X, verbose=True):
         if nan_count > 0:
             print(f'  WARNING: {nan_count} NaN values (typically from zero-length bones)')
 
+<<<<<<< HEAD
     return features
+=======
+    return features
+>>>>>>> 18323399d01ff675f6ffb995d73819bde7128695

@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from .data.loader import DataLoader
 from .clustering.kmeans import KMeansClusterer
+from .clustering.feature_transform import compute_cosine_features
 from .clustering.super_cluster import SuperClusterer
 from .clustering.reducer import UMAPReducer
 from .viz.visualizer import SLBHSViz
@@ -44,6 +45,7 @@ def parse_args():
     parser.add_argument('--overview-umap-n', type=int, default=UMAP_OVERVIEW_N, help='UMAP overview sample size')
     parser.add_argument('--sc-umap-n', type=int, default=UMAP_SC_N, help='UMAP per-supercluster sample size')
     parser.add_argument('--no-verbose', dest='verbose', action='store_false', help='Suppress K-Means progress')
+    parser.add_argument('--cosine-features', action='store_true', help='Use combined features: 63d scaled raw coordinates plus 15-dim cosine similarity features (78d total)')
     return parser.parse_args()
 
 
@@ -66,11 +68,20 @@ def main():
         kc = KMeansClusterer(results_dir=results_dir)
         kc.load()
     else:
-        print(f'=== Step 2: MiniBatch K-Means k={args.k} batch_size={args.batch_size} ===')
-        kc = KMeansClusterer(X=X, results_dir=results_dir)
-        kc.fit_minibatch(k=args.k, seed=args.seed, batch_size=args.batch_size, verbose_progress=args.verbose)
+        kc = KMeansClusterer(results_dir=results_dir)
+        if args.cosine_features:
+            from sklearn.preprocessing import StandardScaler
+            scaler_63d = StandardScaler()
+            X_scaled_63d = scaler_63d.fit_transform(X)
+            X_cosine_15d = compute_cosine_features(X, verbose=True)
+            X_combined = np.hstack([X_scaled_63d, X_cosine_15d])
+            print(f'=== Step 2: Cosine+Raw MiniBatch K-Means k={args.k} input_dim={X_combined.shape[1]} ===')
+            kc.fit_cosine_minibatch(k=args.k, seed=args.seed, X_combined=X_combined, scaler=scaler_63d, batch_size=args.batch_size, verbose_progress=args.verbose)
+        else:
+            print(f'=== Step 2: MiniBatch K-Means k={args.k} batch_size={args.batch_size} ===')
+            kc.fit_minibatch(k=args.k, seed=args.seed, X=X, batch_size=args.batch_size, verbose_progress=args.verbose)
         kc.save()
-        kc.save_model()  # Save sklearn model for inference
+        kc.save_model()
 
     labels = kc.labels_
     centers = kc.centers_
@@ -98,7 +109,6 @@ def main():
     from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
-    # Free raw X immediately — not needed after scaling
     del X
 
     # ---- 5. UMAP ----

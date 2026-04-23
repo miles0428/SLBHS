@@ -45,7 +45,7 @@ def parse_args():
     parser.add_argument('--overview-umap-n', type=int, default=UMAP_OVERVIEW_N, help='UMAP overview sample size')
     parser.add_argument('--sc-umap-n', type=int, default=UMAP_SC_N, help='UMAP per-supercluster sample size')
     parser.add_argument('--no-verbose', dest='verbose', action='store_false', help='Suppress K-Means progress')
-    parser.add_argument('--cosine-features', action='store_true', help='Use 15-dim cosine similarity features instead of raw 63d coordinates')
+    parser.add_argument('--cosine-features', action='store_true', help='Use combined features: 63d scaled raw coordinates plus 15-dim cosine similarity features (78d total)')
     return parser.parse_args()
 
 

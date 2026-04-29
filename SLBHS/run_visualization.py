@@ -63,6 +63,7 @@ def main():
     print(f'  Loaded {X.shape[0]} frames, {X.shape[1]} dims')
 
     # ---- 2. K-Means ----
+    X_for_umap = None  # will be set to 63D scaled or 78D combined, depending on mode
     if args.skip_kmeans:
         print('=== Step 2: Load existing K-Means ===')
         kc = KMeansClusterer(results_dir=results_dir)
@@ -74,9 +75,11 @@ def main():
             scaler_63d = StandardScaler()
             X_scaled_63d = scaler_63d.fit_transform(X)
             X_cosine_15d = compute_cosine_features(X, verbose=True)
-            X_combined = np.hstack([X_scaled_63d, X_cosine_15d])
+            X_combined = np.hstack([X_scaled_63d, X_cosine_15d * 3])  # 3x weight on cosine features
             print(f'=== Step 2: Cosine+Raw MiniBatch K-Means k={args.k} input_dim={X_combined.shape[1]} ===')
             kc.fit_cosine_minibatch(k=args.k, seed=args.seed, X_combined=X_combined, scaler=scaler_63d, batch_size=args.batch_size, verbose_progress=args.verbose)
+            X_for_umap = X_combined  # keep for UMAP step
+            del X_scaled_63d, X_cosine_15d
         else:
             print(f'=== Step 2: MiniBatch K-Means k={args.k} batch_size={args.batch_size} ===')
             kc.fit_minibatch(k=args.k, seed=args.seed, X=X, batch_size=args.batch_size, verbose_progress=args.verbose)
@@ -104,12 +107,16 @@ def main():
     super_labels = sc.super_labels_
     print(f'  Super clusters done: {sc.n_super_} super clusters')
 
-    # ---- 4. Scale X + Build UMAP Reducer ----
-    print('=== Step 4: Scale data ===')
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    del X
+    # ---- 4. Prepare UMAP input ----
+    if args.cosine_features:
+        # X_for_umap was set to X_combined (78D) in Step 2 — reuse it
+        print(f'=== Step 4: Prepare UMAP input (combined {X_for_umap.shape[1]}D) ===')
+    else:
+        print('=== Step 4: Scale data ===')
+        from sklearn.preprocessing import StandardScaler
+        scaler = StandardScaler()
+        X_for_umap = scaler.fit_transform(X)
+        del X, scaler
 
     # ---- 5. UMAP ----
     if args.skip_umap:
@@ -117,11 +124,10 @@ def main():
         overview_umap = None
         overview_labels = None
         sc_umaps = {}
-        # X_scaled no longer needed — free it
-        del X_scaled
+        del X_for_umap
     else:
         print(f'=== Step 5: UMAP (overview n={args.overview_umap_n}, sc n={args.sc_umap_n}) ===')
-        reducer = UMAPReducer(X_scaled, super_labels=frame_super, cache_dir=results_dir)
+        reducer = UMAPReducer(X_for_umap, super_labels=frame_super, cache_dir=results_dir)
         overview_umap, ov_idx = reducer.transform_overview(n=args.overview_umap_n, seed=args.seed, n_neighbors=args.n_neighbors)
         overview_labels = frame_super[ov_idx]
         sc_umaps = {}
@@ -132,8 +138,7 @@ def main():
             sc_frame_labels = labels[sc_indices[sc_umap_idx]]
             sc_umaps[s] = (sc_umap, sc_frame_labels)
             print(f'  SC {s}: {len(sc_umap)} UMAP points')
-        # Free X_scaled and reducer immediately — not needed after UMAP
-        del X_scaled, reducer
+        del X_for_umap, reducer
 
     # ---- 6. Visualize ----
     print('=== Step 6: Visualize ===')

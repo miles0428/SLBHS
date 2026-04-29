@@ -36,7 +36,7 @@ class UMAPReducer:
 
     def _cache_key(self, kind, **kwargs):
         """Generate a unique cache key from parameters."""
-        key = json.dumps({'kind': kind, **kwargs}, sort_keys=True)
+        key = json.dumps({'kind': kind, 'input_dim': self.X.shape[1], **kwargs}, sort_keys=True)
         digest = hashlib.md5(key.encode()).hexdigest()[:12]
         return os.path.join(self.cache_dir, f'{kind}_{digest}.npy')
 

@@ -24,11 +24,14 @@ pip install .
 # Full pipeline: load data → K-Means → SuperCluster → UMAP → plot → save
 python -m SLBHS.run_visualization --k 512 --n-super 20 --format both
 
+# With cosine features (63D scaled + 15D bone-angle cosine = 78D)
+python -m SLBHS.run_visualization --k 512 --n-super 20 --cosine-features
+
 # Skip K-Means and SuperCluster (load cached results)
 python -m SLBHS.run_visualization --skip-kmeans --skip-super
 
 # Customize UMAP sampling
-python -m SLBHS.run_visualization --k 512 --n-super 20 --overview-n 10000 --sc-n 2000
+python -m SLBHS.run_visualization --k 512 --n-super 20 --overview-umap-n 10000 --sc-umap-n 2000
 
 # Customize n_neighbors for UMAP (default: 30)
 python -m SLBHS.run_visualization --k 512 --n-neighbors 10
@@ -41,18 +44,29 @@ python -m SLBHS.run_visualization --k 512 --n-neighbors 10
 | `--k` | 512 | K-Means number of clusters |
 | `--n-super` | 20 | Number of super clusters |
 | `--batch-size` | 5000 | MiniBatch K-Means batch size |
-| `--n-neighbors` | 30 | UMAP n_neighbors parameter |
 | `--seed` | 42 | Random seed |
+| `--n-neighbors` | 30 | UMAP n_neighbors parameter |
+| `--overview-umap-n` | 10000 | UMAP overview sample size |
+| `--sc-umap-n` | 2000 | UMAP per-supercluster sample size |
 | `--data-dir` | . | H5 data directory |
 | `--results-dir` | results | Results directory |
-| `--dpi` | 300 | PNG DPI |
+| `--dpi` | 200 | PNG DPI |
 | `--format` | png | Output format: png, svg, or both |
 | `--skip-kmeans` | - | Skip K-Means (load cached) |
 | `--skip-super` | - | Skip SuperCluster (load cached) |
 | `--skip-umap` | - | Skip UMAP computation (load cached) |
 | `--no-verbose` | - | Suppress K-Means iteration progress |
+| `--cosine-features` | - | Use 63D scaled + 15D cosine = 78D combined features |
 
+## Visualization
 
+Generate per-cluster representative frame PNGs:
+
+```bash
+python -m SLBHS.viz.gen_samples --results-dir results
+```
+
+Each PNG shows a 5×N grid of hand skeleton overlays with MediaPipe landmark connections.
 
 ## Inference (classify new data)
 
@@ -72,7 +86,7 @@ labels = kc.predict(new_data)
 Yu-Cheng Chung
 
 ## License
-See `LICENSE` file. 
+See `LICENSE` file.
 
 This project is released for research purposes only.
 

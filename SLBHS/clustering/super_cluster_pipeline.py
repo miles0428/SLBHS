@@ -315,7 +315,13 @@ class SimilarityMatrix:
 
         # 2. 列歸一化（row-wise，即對每列 i，將其所有出現在 j 的次數 normalize）
         row_sums = W.sum(axis=1, keepdims=True)  # (1024, 1)
-        # 避免除 0
+        # 避免除 0 — cold-start: zero-row 給 epsilon uniform smoothing
+        zero_mask = (row_sums.flatten() == 0)
+        if zero_mask.any():
+            epsilon = 1.0 / W.shape[1]
+            W[zero_mask] = epsilon
+            row_sums[zero_mask] = epsilon * W.shape[1]
+            logger.info(f"[SimilarityMatrix] cold-start: {zero_mask.sum()} zero-row(s) smoothed with epsilon={epsilon:.6f}")
         row_sums[row_sums == 0] = 1.0
         M_prob = W / row_sums  # (1024, 1024)
 
@@ -663,6 +669,7 @@ class BigClusterPipeline:
 
         # BigClusterer
         self.big_clusterer.fit(S, tau=tau)
+        self._tau_used = tau  # record actual tau for report
         logger.info(f"[Pipeline.finalize] BigClusterer: N_clusters={self.big_clusterer.n_clusters}")
 
         self._fitted = True
@@ -714,7 +721,7 @@ class BigClusterPipeline:
         report = {
             "phase": 2,
             "k": getattr(self, '_k_used', self.transition_counter.k),
-            "tau": self.tau,
+            "tau": getattr(self, '_tau_used', self.tau),
             "cosine_features": getattr(self, 'cosine_features', None),
             "hand_labeler": {
                 "fitted": self.hand_labeler._fitted
@@ -778,7 +785,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("測試模式 1：cosine_features=True")
     print("=" * 60)
-    pipeline_cos = SuperClusterPipeline(k=512, tau=0.9)
+    pipeline_cos = BigClusterPipeline(k=512, tau=0.9)
     pipeline_cos.fit(
         X, x_vec, y_vec, z_vec,
         cosine_features=True,
@@ -796,7 +803,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("測試模式 2：cosine_features=False (MiniBatchKMeans on raw 63D)")
     print("=" * 60)
-    pipeline_raw = SuperClusterPipeline(k=64, tau=0.9)
+    pipeline_raw = BigClusterPipeline(k=64, tau=0.9)
     pipeline_raw.fit(
         X, x_vec, y_vec, z_vec,
         cosine_features=False,

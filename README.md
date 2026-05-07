@@ -131,9 +131,11 @@ labels = kc.predict(new_data)  # (N,), 0-1023
 ```python
 from SLBHS.clustering.kmeans import KMeansClusterer
 from SLBHS.clustering.feature_transform import compute_cosine_features
+from sklearn.preprocessing import StandardScaler
 
 # Cosine feature 模式需要：StandardScaler(63D) + 15D bone-angle cosine
 # 使用 fit_cosine_minibatch() 訓練
+scaler = StandardScaler()
 kc = KMeansClusterer(results_dir='results', k=512)
 X_cosine = compute_cosine_features(X)  # (N, 15)
 X_combined = np.hstack([scaler.fit_transform(X), X_cosine * 3])  # (N, 78)

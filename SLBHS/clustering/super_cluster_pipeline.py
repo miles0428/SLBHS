@@ -155,15 +155,12 @@ class TransitionCounter:
             對每個 Token_i，檢查 i→i+1, i→i+2, ..., i→i+delta_t
             每個符合的 pair 都 C[Token_i, Token_{i+k}] += 1（k=1~delta_t）
 
-            過濾：低於 min_transitions 次的 Token 對清除為 0
+            向量化實作：對每個 k，統計 track[:-k] → track[k:] 的轉移
             """
-            for i in range(len(track)):
-                t_from = int(track[i])
-                # 往後看 delta_t 步，每步都統計
-                for k in range(1, delta_t + 1):
-                    if i + k < len(track):
-                        t_to = int(track[i + k])
-                        C[t_from, t_to] += 1
+            for k in range(1, delta_t + 1):
+                from_tokens = track[:-k]  # (N-k,)
+                to_tokens = track[k:]      # (N-k,)
+                np.add.at(C, (from_tokens, to_tokens), 1)
             return C
 
         _count_transitions(left_track, C)

@@ -17,9 +17,9 @@ BigClusterPipeline: 串接全部，一鍵產出 Phase 2 結果
  Validation Criteria
 --------------------
 產出：
-  - results/similarity_matrix.npy  — S (1024, 1024)，無 NaN
-  - results/transition_matrix.npy  — C (1024, 1024)
-  - results/symmetrized_matrix.npy — W (1024, 1024)
+  - results/similarity_matrix.npy  — S (k, k)，無 NaN
+  - results/transition_matrix.npy  — C (k, k)
+  - results/symmetrized_matrix.npy — W (k, k)
   - results/super_cluster_map.json — {token_id: super_cluster_id}
   - results/pipeline_phase2.json  — Phase 2 完整摘要
 
@@ -424,7 +424,6 @@ class BigClusterPipeline:
 
     def __init__(
         self,
-        k: int = 1024,                  # K-Means 群數
         tau: float = 0.9,               # BigClusterer threshold (0.0-1.0)
         delta_t: int = 10,               # 轉移間隔 (n → n+delta_t)
         min_transitions: int = 0,        # 最小轉移次數（低於此則忽略）
@@ -435,8 +434,6 @@ class BigClusterPipeline:
         """
         Parameters
         ----------
-        k : int
-            K-Means 群數。
         tau : float
             相似度閾值（0.0-1.0），S_ij > tau → 建邊。
         delta_t : int
@@ -451,7 +448,6 @@ class BigClusterPipeline:
         results_dir : str or None
             Pipeline 產出路徑（相似度矩陣、超級分群映射等）。
         """
-        self.k = k
         self.tau = tau
         self.delta_t = delta_t
         self.min_transitions = min_transitions
@@ -459,7 +455,7 @@ class BigClusterPipeline:
         self.model_dir = model_dir
         self.results_dir = results_dir
         self.hand_labeler = HandLabeler()
-        self.transition_counter = TransitionCounter(k=k, delta_t=delta_t, min_transitions=min_transitions)
+        self.transition_counter = TransitionCounter(delta_t=delta_t, min_transitions=min_transitions)
         self.similarity_matrix = SimilarityMatrix()
         self.big_clusterer = BigClusterer(tau=tau)
         self._fitted = False
@@ -469,7 +465,6 @@ class BigClusterPipeline:
     def fit(self, X: np.ndarray, x_vec: np.ndarray,
             y_vec: np.ndarray, z_vec: np.ndarray,
             labels: Optional[np.ndarray] = None,
-            k: Optional[int] = None,
             tau: Optional[float] = None,
             min_transitions: Optional[int] = None,
             delta_t: Optional[int] = None,
@@ -483,7 +478,7 @@ class BigClusterPipeline:
         1. HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
         2. 若 labels 未提供：依 model_dir 或 MiniBatchKMeans 產生
            - model_dir：KMeansClusterer.load_model() + predict()（只吃預訓練）
-           - 無 model_dir：MiniBatchKMeans on raw 63D
+           - 無 model_dir：MiniBatchKMeans on raw 63D（需自行提供 k）
         3. TransitionCounter.fit(labels, hand_labels) → C
         4. SimilarityMatrix.compute(C) → S
         5. BigClusterer.fit(S, tau) → super_cluster_map
@@ -495,9 +490,8 @@ class BigClusterPipeline:
         y_vec : (N, 3) y 軸向量
         z_vec : (N, 3) z 軸向量
         labels : (N,) Token_ID；若 None 則依 model_dir 模式產生
-        k : int — K-Means 群數（無 model_dir 且 labels=None 時使用）
         tau : float — similarity threshold
-        model_dir : str — KMeans 模型目錄（kmeans_model.joblib）
+        model_dir : str — KMeans 模型目錄（k 從 meta.json 讀取）
         results_dir : str — pipeline 產出路徑
         """
         from sklearn.cluster import MiniBatchKMeans
@@ -507,7 +501,6 @@ class BigClusterPipeline:
         from SLBHS.clustering.kmeans import KMeansClusterer
 
         # 解析參數（優先使用傳入值，否則用實例變數）
-        k = k if k is not None else self.k
         tau = tau if tau is not None else self.tau
         min_transitions = min_transitions if min_transitions is not None else self.min_transitions
         delta_t = delta_t if delta_t is not None else self.delta_t
@@ -515,7 +508,7 @@ class BigClusterPipeline:
         model_dir = model_dir if model_dir is not None else self.model_dir
         results_dir = results_dir if results_dir is not None else self.results_dir
 
-        logger.info(f"[BigClusterPipeline.fit] k={k}, tau={tau}, "
+        logger.info(f"[BigClusterPipeline.fit] tau={tau}, "
                     f"delta_t={delta_t}, min_transitions={min_transitions}, "
                     f"symmetrize={symmetrize}, model_dir={model_dir}")
 
@@ -533,27 +526,21 @@ class BigClusterPipeline:
                 kc.load_model(model_dir)
                 labels = kc.predict(X)
                 actual_k = kc.k
-                # 若 model 的 k 與 CLI --k 不同，以 model 為準，重新 init TransitionCounter
-                if actual_k != k:
-                    logger.info(f"[Pipeline.fit] Model k={actual_k} differs from CLI k={k}, "
-                                f"reinitializing TransitionCounter with actual_k={actual_k}")
-                    self.transition_counter = TransitionCounter(
-                        k=actual_k, delta_t=delta_t, min_transitions=min_transitions
-                    )
-                k = actual_k
+                # Reinit TransitionCounter with actual_k from loaded model
+                logger.info(f"[Pipeline.fit] Model k={actual_k}, reinitializing TransitionCounter")
+                self.transition_counter = TransitionCounter(
+                    k=actual_k, delta_t=delta_t, min_transitions=min_transitions
+                )
                 self._kmeans_loaded = True
                 self._kmeans_clusterer = kc
-                logger.info(f"[Pipeline.fit] KMeansClusterer.predict done: "
-                            f"unique_labels={len(np.unique(labels))}, k={k}")
+                k = actual_k  # store for later use (e.g. _k_used)
             else:
-                # Fallback：MiniBatchKMeans on raw 63D
-                logger.info(f"[Pipeline.fit] MiniBatchKMeans (k={k}) on raw 63D...")
-                scaler = StandardScaler()
-                X_scaled = scaler.fit_transform(X).astype(np.float64)
-                kmeans = MiniBatchKMeans(n_clusters=k, random_state=42, n_init=3)
-                labels = kmeans.fit_predict(X_scaled)
-                logger.info(f"[Pipeline.fit] MiniBatchKMeans done, "
-                            f"labels range: {int(labels.min())}-{int(labels.max())}")
+                # Fallback：MiniBatchKMeans on raw 63D（需指定 k）
+                raise ValueError(
+                    "model_dir is required. MiniBatchKMeans fallback is no longer supported "
+                    "without an explicit k. Please provide --model-dir pointing to a "
+                    "pre-trained KMeans model directory."
+                )
 
         self.labels = labels
         self._k_used = k
@@ -603,6 +590,12 @@ class BigClusterPipeline:
         from SLBHS.clustering.kmeans import KMeansClusterer
 
         model_dir = self.model_dir
+
+        if model_dir is None:
+            raise ValueError(
+                "model_dir is required for update(). "
+                "MiniBatchKMeans fallback is not supported."
+            )
 
         # Step 1：HandLabeler
         hand_labels = self.hand_labeler.fit_predict(x_vec, y_vec, z_vec)
@@ -682,8 +675,8 @@ class BigClusterPipeline:
         儲存 pipeline 產出到 results_dir
 
         Phase 2 產出：
-        - similarity_matrix.npy : S 矩陣 (1024, 1024)
-        - transition_matrix.npy : C 矩陣 (1024, 1024)
+        - similarity_matrix.npy : S 矩陣 (k, k)
+        - transition_matrix.npy : C 矩陣 (k, k)
         - super_cluster_map.json : Map[Token_ID] → Super_Cluster_ID
         - pipeline_phase2.json : 摘要報告
         """
@@ -720,7 +713,7 @@ class BigClusterPipeline:
         # 摘要報告
         report = {
             "phase": 2,
-            "k": getattr(self, '_k_used', self.k),
+            "k": getattr(self, '_k_used', self.transition_counter.k),
             "tau": self.tau,
             "cosine_features": getattr(self, 'cosine_features', None),
             "hand_labeler": {

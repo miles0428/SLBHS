@@ -321,30 +321,26 @@ def test_bigclusterer_n_clusters_positive(labels_64, h5_data):
 
 def test_bigclusterpipeline_fitted_true(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipeline = BigClusterPipeline(
-        k=64, tau=0.5, results_dir=None
-    )
+    pipeline = BigClusterPipeline(tau=0.5, model_dir=MODEL_DIR, results_dir=None)
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        k=64,
+       
     )
     assert pipeline._fitted is True
 
 
 def test_bigclusterpipeline_s_no_nan(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipeline = BigClusterPipeline(
-        k=64, tau=0.5, results_dir=None
-    )
+    pipeline = BigClusterPipeline(tau=0.5, model_dir=MODEL_DIR, results_dir=None)
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        k=64,
+       
     )
     S = pipeline.similarity_matrix.S
     assert np.sum(np.isnan(S)) == 0
@@ -352,15 +348,13 @@ def test_bigclusterpipeline_s_no_nan(h5_data):
 
 def test_bigclusterpipeline_save_load(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipeline = BigClusterPipeline(
-        k=64, tau=0.5, results_dir=None
-    )
+    pipeline = BigClusterPipeline(tau=0.5, model_dir=MODEL_DIR, results_dir=None)
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        k=64,
+       
     )
     with tempfile.TemporaryDirectory() as tmpdir:
         pipeline.save(tmpdir)
@@ -376,29 +370,27 @@ def test_bigclusterpipeline_save_load(h5_data):
         # Validate JSON load
         with open(os.path.join(tmpdir, "super_cluster_map.json")) as f:
             sc_map = json.load(f)
-        assert len(sc_map) == 64, "super_cluster_map should have 64 entries"
+        assert len(sc_map) == 512, "super_cluster_map should have 512 entries"
         # Validate npy files
         S = np.load(os.path.join(tmpdir, "similarity_matrix.npy"))
-        assert S.shape == (64, 64)
+        assert S.shape == (512, 512)
         assert np.sum(np.isnan(S)) == 0
 
 
 def test_bigclusterpipeline_tau_0_9_clusters(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipeline = BigClusterPipeline(
-        k=64, tau=0.9, results_dir=None
-    )
+    pipeline = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        k=64,
+       
     )
     # tau=0.9 should produce at least 1 cluster
     assert pipeline.big_clusterer.n_clusters >= 1
     # Every token must be mapped
-    assert len(pipeline.big_clusterer.cluster_map) == 64
+    assert len(pipeline.big_clusterer.cluster_map) == 512
 
 
 # --------------------------------------------------------------------------
@@ -472,14 +464,14 @@ def test_pipeline_update_then_finalize_matches_fit(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
 
     # mode A: single fit()
-    pipe_fit = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
+    pipe_fit = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
     pipe_fit.fit(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"],
-                 k=64, tau=0.9)
+                 tau=0.9)
     C_fit = pipe_fit.transition_counter.get_matrix()
     S_fit = pipe_fit.similarity_matrix.S
 
     # mode B: update() + finalize()
-    pipe_upd = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
+    pipe_upd = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
     pipe_upd.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
     pipe_upd.finalize(tau=0.9)
     C_upd = pipe_upd.transition_counter.get_matrix()
@@ -493,7 +485,7 @@ def test_pipeline_update_then_finalize_matches_fit(h5_data):
 def test_pipeline_update_then_finalize_no_nan(h5_data):
     """S matrix from finalize() must not contain NaN."""
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipe = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
+    pipe = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
     pipe.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
     pipe.finalize(tau=0.9)
     S = pipe.similarity_matrix.S
@@ -514,7 +506,7 @@ def test_pipeline_update_twice_accumulates(h5_data):
     zv_a = h5_data["z_vec"][:N]
     zv_b = h5_data["z_vec"][N:2*N]
 
-    pipe = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
+    pipe = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
     pipe.update(X_a, xv_a, yv_a, zv_a)
     pipe.update(X_b, xv_b, yv_b, zv_b)
     pipe.finalize(tau=0.9)
@@ -537,7 +529,7 @@ def test_pipeline_fit_with_model_dir(h5_data):
 
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
     pipeline = BigClusterPipeline(
-        k=1024, tau=0.9, model_dir=MODEL_DIR, results_dir=None
+        tau=0.9, model_dir=MODEL_DIR, results_dir=None
     )
     pipeline.fit(
         h5_data["X"],
@@ -572,7 +564,7 @@ def test_pipeline_update_with_model_dir_loads_once(h5_data):
     zv_a = h5_data["z_vec"][:N]
     zv_b = h5_data["z_vec"][N:2*N]
 
-    pipeline = BigClusterPipeline(k=1024, tau=0.9, model_dir=MODEL_DIR, results_dir=None)
+    pipeline = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
 
     # First update: model loads
     pipeline.update(X_a, xv_a, yv_a, zv_a)
@@ -595,7 +587,7 @@ def test_pipeline_update_finalize_with_model_dir_no_nan(h5_data):
         pytest.skip(f"Model dir not found: {MODEL_DIR}")
 
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipeline = BigClusterPipeline(k=1024, tau=0.9, model_dir=MODEL_DIR, results_dir=None)
+    pipeline = BigClusterPipeline(tau=0.9, model_dir=MODEL_DIR, results_dir=None)
     pipeline.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
     pipeline.finalize(tau=0.9)
 

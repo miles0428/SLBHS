@@ -82,9 +82,9 @@ python run_pipeline.py \
 |------|------|------|
 | `--folder` | H5 folder（批次） | - |
 | `--h5` | 單一 H5（debug） | - |
-| `--model-dir` | KMeans 模型目錄 | - |
+| `--model-dir` | KMeans 模型目錄（k 從 meta.json 讀取）| - |
 | `--output` | 產出資料夾 | results |
-| `--k` | K-Means 群數 | 1024 |
+| `--k` | ~~K-Means 群數~~（已移除，k 由 model meta.json 決定）| ~~1024~~ |
 | `--tau` | 相似度閾值 | 0.9 |
 | `--delta-t` | 轉移間隔 | 10 |
 | `--min-transitions` | 最低轉移次數 | 0 |

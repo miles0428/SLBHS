@@ -91,14 +91,6 @@ def parse_args():
         help='Results output directory. Default: results'
     )
     parser.add_argument(
-        '--k',
-        type=int,
-        default=1024,
-        help='K-Means number of clusters. Only used when --model-dir is NOT provided. '
-             'When --model-dir is provided, k is determined by the model\'s meta.json and this argument is ignored.',
-        dest='k'
-    )
-    parser.add_argument(
         '--tau',
         type=float,
         default=0.9,
@@ -146,19 +138,8 @@ def main():
     if args.model_dir is None:
         logger.warning("--model-dir not specified; will use MiniBatchKMeans fallback (no pre-trained model)")
 
-    # Conflict check: when model_dir is provided, --k is meaningless
-    if args.model_dir is not None and args.k != 1024:
-        raise ValueError(
-            f"--k={args.k} conflicts with --model-dir: "
-            f"when --model-dir is provided, k is determined by the model's meta.json, "
-            f"and CLI --k is ignored. Remove --k or use --model-dir without --k."
-        )
-    if args.model_dir is not None:
-        logger.info(f"[run_pipeline] --model-dir provided: k will be read from model meta.json (CLI --k is ignored)")
-
     # Common parameters
     common_kwargs = dict(
-        k=args.k,  # used only when model_dir=None (MiniBatchKMeans fallback)
         tau=args.tau,
         delta_t=args.delta_t,
         min_transitions=args.min_transitions,
@@ -206,12 +187,11 @@ def main():
 
         pipeline = BigClusterPipeline(**common_kwargs)
 
-        logger.info(f"Starting pipeline: k={args.k}, tau={args.tau}, "
+        logger.info(f"Starting pipeline: tau={args.tau}, "
                     f"model_dir={args.model_dir}, delta_t={args.delta_t}")
 
         pipeline.fit(
             X, x_vec, y_vec, z_vec,
-            k=args.k,
             tau=args.tau,
             min_transitions=args.min_transitions,
             delta_t=args.delta_t,

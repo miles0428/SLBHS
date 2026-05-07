@@ -1,16 +1,31 @@
 #!/usr/bin/env python3
 """
-run_pipeline.py — Super Cluster Pipeline CLI 入口
+run_pipeline.py — Super Cluster Pipeline CLI 入口（v3）
+
+完全吃 K-Means model，不碰 training，只做：
+    H5 → predict → C → S → SuperCluster
 
 用法：
     # 批次模式（多個 H5）：走 update() + finalize()
-    python run_pipeline.py --folder /path/to/h5/folder --k 1024 --delta-t 10 --tau 0.9 --output results/
+    python run_pipeline.py \
+        --folder /path/to/h5/folder \
+        --model-dir /path/to/kmeans/model/ \
+        --k 1024 \
+        --delta-t 10 \
+        --tau 0.9 \
+        --output results/
 
-    # 單一 H5 模式：走 fit()（直接完成）
-    python run_pipeline.py --h5 /path/to/single.h5 --k 1024 --delta-t 10 --tau 0.9 --output results/
+    # 單一 H5 模式（debug）：走 fit()
+    python run_pipeline.py \
+        --h5 /path/to/single.h5 \
+        --model-dir /path/to/kmeans/model/ \
+        --k 1024 \
+        --delta-t 10 \
+        --tau 0.9 \
+        --output results/
 
     # 詳細輸出
-    python run_pipeline.py --folder /path/to/h5/folder --k 1024 --delta-t 10 --tau 0.9 --output results/ -v
+    python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
 """
 
 import argparse
@@ -35,18 +50,18 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="SLBHS Super Cluster Pipeline",
+        description="SLBHS Super Cluster Pipeline v3 — 吃 K-Means model，不 training",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 範例：
   # 批次模式（多個 H5）
-  python run_pipeline.py --folder /path/to/h5/folder --k 1024 --delta-t 10 --tau 0.9 --output results/
+  python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ --k 1024 --delta-t 10 --tau 0.9 --output results/
 
   # 單一 H5 模式
-  python run_pipeline.py --h5 /path/to/file.h5 --k 1024 --delta-t 10 --tau 0.9 --output results/
+  python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --k 1024 --delta-t 10 --tau 0.9 --output results/
 
   # 詳細輸出
-  python run_pipeline.py --folder /path/to/h5/folder -v
+  python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
         """
     )
     parser.add_argument(
@@ -54,13 +69,20 @@ def parse_args():
         type=str,
         default=None,
         help='Path to folder containing multiple H5 files. '
-             'Batch processes all *.h5 files, computing S and BigClusterer at the end.'
+             'Batch processes all *.h5 files via update()+finalize().'
     )
     parser.add_argument(
         '--h5',
         type=str,
         default=None,
-        help='Path to a single H5 file. Uses fit() directly (no batch finalize).'
+        help='Path to a single H5 file. Uses fit() directly.'
+    )
+    parser.add_argument(
+        '--model-dir',
+        type=str,
+        default=None,
+        help='KMeans model directory containing kmeans_model.joblib + kmeans_scaler.joblib. '
+             'Pipeline only loads model (no training). Required when using --folder.'
     )
     parser.add_argument(
         '--output',
@@ -99,11 +121,6 @@ def parse_args():
         help='Symmetrize transition matrix. Default: True'
     )
     parser.add_argument(
-        '--cosine-features',
-        action='store_true',
-        help='Use 78D cosine features (63D scaled + 15D bone-angle) instead of raw 63D'
-    )
-    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Show verbose output'
@@ -123,6 +140,10 @@ def main():
     if args.folder and args.h5:
         raise ValueError("Cannot specify both --folder and --h5. Use one or the other.")
 
+    # Validate model_dir
+    if args.model_dir is None:
+        logger.warning("--model-dir not specified; will use MiniBatchKMeans fallback (no pre-trained model)")
+
     # Common parameters
     common_kwargs = dict(
         k=args.k,
@@ -130,7 +151,7 @@ def main():
         delta_t=args.delta_t,
         min_transitions=args.min_transitions,
         symmetrize=args.symmetrize,
-        cosine_features=args.cosine_features,
+        model_dir=args.model_dir,
         results_dir=args.output,
     )
 
@@ -174,16 +195,16 @@ def main():
         pipeline = BigClusterPipeline(**common_kwargs)
 
         logger.info(f"Starting pipeline: k={args.k}, tau={args.tau}, "
-                    f"cosine_features={args.cosine_features}, delta_t={args.delta_t}")
+                    f"model_dir={args.model_dir}, delta_t={args.delta_t}")
 
         pipeline.fit(
             X, x_vec, y_vec, z_vec,
             k=args.k,
             tau=args.tau,
-            cosine_features=args.cosine_features,
             min_transitions=args.min_transitions,
             delta_t=args.delta_t,
             symmetrize=args.symmetrize,
+            model_dir=args.model_dir,
             results_dir=args.output,
         )
 
@@ -199,7 +220,7 @@ def main():
     logger.info(f"  k={pipeline._k_used}")
     logger.info(f"  tau={args.tau}")
     logger.info(f"  delta_t={args.delta_t}")
-    logger.info(f"  cosine_features={pipeline.cosine_features}")
+    logger.info(f"  model_dir={args.model_dir}")
     logger.info(f"  N Super Clusters={n_clusters}")
     logger.info(f"  tokens in clusters={len(cluster_map)}")
     logger.info(f"  results saved to: {args.output}")

@@ -408,15 +408,15 @@ class BigClusterPipeline:
 
     內部流程：
         1. HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
-        2. KMeans → labels（cosine_features 模式切換）
+        2. KMeans → labels（model_dir 模式：只 load 不 train）
         3. TransitionCounter.fit(labels, hand_labels) → C
         4. SimilarityMatrix.compute(C) → S
         5. BigClusterer.fit(S, tau) → super_cluster_map
 
     Example
     -------
-    >>> pipeline = BigClusterPipeline(k=512, tau=0.9, cosine_features=True, results_dir='results')
-    >>> pipeline.fit(X, x_vec, y_vec, z_vec, cosine_features=True, results_dir='results')
+    >>> pipeline = BigClusterPipeline(k=1024, tau=0.9, model_dir='/path/to/kmeans/model/')
+    >>> pipeline.fit(X, x_vec, y_vec, z_vec)
     >>> pipeline.save('results')
     >>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
     Super Clusters: 42
@@ -424,13 +424,13 @@ class BigClusterPipeline:
 
     def __init__(
         self,
-        k: int = 512,                    # K-Means 群數
-        tau: float = 0.9,                # BigClusterer threshold (0.0-1.0)
-        delta_t: int = 1,                # 轉移間隔 (n → n+delta_t)
-        cosine_features: bool = True,    # 是否用 cosine feature
+        k: int = 1024,                  # K-Means 群數
+        tau: float = 0.9,               # BigClusterer threshold (0.0-1.0)
+        delta_t: int = 10,               # 轉移間隔 (n → n+delta_t)
         min_transitions: int = 0,        # 最小轉移次數（低於此則忽略）
         symmetrize: bool = True,         # 是否對稱化
-        results_dir: Optional[str] = None,
+        model_dir: Optional[str] = None, # KMeans 模型目錄（只吃預訓練模型，不 train）
+        results_dir: Optional[str] = None, # pipeline 產出路徑
     ):
         """
         Parameters
@@ -441,51 +441,52 @@ class BigClusterPipeline:
             相似度閾值（0.0-1.0），S_ij > tau → 建邊。
         delta_t : int
             轉移間隔，統計 n → n+delta_t 的轉移。
-        cosine_features : bool
-            是否使用 cosine feature 模式。
-            True：StandardScaler + cosine(15D) → concat(78D) → KMeansClusterer.predict
-            False：直接用 aligned_63d (N,63) → MiniBatchKMeans
         min_transitions : int
             最低轉移次數，低於此的 Token 對清除為 0。
         symmetrize : bool
             是否對稱化轉移矩陣（預設 True）。
+        model_dir : str or None
+            KMeans 模型目錄，內含 kmeans_model.joblib + kmeans_scaler.joblib。
+            update()/fit() 只 load model，不 train。
         results_dir : str or None
-            KMeansClusterer 模型路徑（cosine_features=True 時必要）。
+            Pipeline 產出路徑（相似度矩陣、超級分群映射等）。
         """
         self.k = k
         self.tau = tau
         self.delta_t = delta_t
-        self.cosine_features = cosine_features
         self.min_transitions = min_transitions
         self.symmetrize = symmetrize
+        self.model_dir = model_dir
         self.results_dir = results_dir
         self.hand_labeler = HandLabeler()
         self.transition_counter = TransitionCounter(k=k, delta_t=delta_t, min_transitions=min_transitions)
         self.similarity_matrix = SimilarityMatrix()
-        self.big_clusterer = BigClusterer(tau=tau)  # 原 ClusterExtractor，更名以區分於 HierarchicalVisualizer
+        self.big_clusterer = BigClusterer(tau=tau)
         self._fitted = False
+        self._kmeans_loaded = False
+        self._kmeans_clusterer = None  # KMeansClusterer instance (loaded lazily)
 
     def fit(self, X: np.ndarray, x_vec: np.ndarray,
             y_vec: np.ndarray, z_vec: np.ndarray,
             labels: Optional[np.ndarray] = None,
             k: Optional[int] = None,
             tau: Optional[float] = None,
-            cosine_features: Optional[bool] = None,
             min_transitions: Optional[int] = None,
             delta_t: Optional[int] = None,
             symmetrize: Optional[bool] = None,
+            model_dir: Optional[str] = None,
             results_dir: Optional[str] = None) -> 'BigClusterPipeline':
         """
-        串接 Phase 2 完整 pipeline
+        串接 Phase 2 完整 pipeline（單一 H5 直接完成）
 
         流程：
         1. HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
-        2. 若 labels 未提供：
-           - cosine_features=True：KMeansClusterer.predict(X) [cosine mode]
-           - cosine_features=False：MiniBatchKMeans on raw 63D
+        2. 若 labels 未提供：依 model_dir 或 MiniBatchKMeans 產生
+           - model_dir：KMeansClusterer.load_model() + predict()（只吃預訓練）
+           - 無 model_dir：MiniBatchKMeans on raw 63D
         3. TransitionCounter.fit(labels, hand_labels) → C
         4. SimilarityMatrix.compute(C) → S
-        5. ClusterExtractor.fit(S, tau) → super_cluster_map
+        5. BigClusterer.fit(S, tau) → super_cluster_map
 
         Parameters
         ----------
@@ -493,94 +494,88 @@ class BigClusterPipeline:
         x_vec : (N, 3) x 軸向量
         y_vec : (N, 3) y 軸向量
         z_vec : (N, 3) z 軸向量
-        labels : (N,) Token_ID；若 None 則依 cosine_features 模式產生
-        k : int — K-Means 群數（cosine_features=False 且 labels=None 時使用）
+        labels : (N,) Token_ID；若 None 則依 model_dir 模式產生
+        k : int — K-Means 群數（無 model_dir 且 labels=None 時使用）
         tau : float — similarity threshold
-        cosine_features : bool — 是否使用 cosine feature 模式
-           True：StandardScaler + cosine(15D) → concat(78D) → KMeansClusterer.predict
-           False：直接用 aligned_63d (N,63) → MiniBatchKMeans
-        results_dir : str — KMeansClusterer 模型路徑（cosine_features=True 時必要）
+        model_dir : str — KMeans 模型目錄（kmeans_model.joblib）
+        results_dir : str — pipeline 產出路徑
         """
         from sklearn.cluster import MiniBatchKMeans
         from sklearn.preprocessing import StandardScaler
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent.parent))
         from SLBHS.clustering.kmeans import KMeansClusterer
-        from SLBHS.clustering.feature_transform import compute_cosine_features
 
         # 解析參數（優先使用傳入值，否則用實例變數）
         k = k if k is not None else self.k
         tau = tau if tau is not None else self.tau
-        cosine_features = cosine_features if cosine_features is not None else self.cosine_features
         min_transitions = min_transitions if min_transitions is not None else self.min_transitions
         delta_t = delta_t if delta_t is not None else self.delta_t
         symmetrize = symmetrize if symmetrize is not None else self.symmetrize
+        model_dir = model_dir if model_dir is not None else self.model_dir
         results_dir = results_dir if results_dir is not None else self.results_dir
 
-        logger.info(f"[BigClusterPipeline] cosine_features={cosine_features}, k={k}, "
-                    f"tau={tau}, delta_t={delta_t}, min_transitions={min_transitions}, "
-                    f"symmetrize={symmetrize}")
+        logger.info(f"[BigClusterPipeline.fit] k={k}, tau={tau}, "
+                    f"delta_t={delta_t}, min_transitions={min_transitions}, "
+                    f"symmetrize={symmetrize}, model_dir={model_dir}")
 
         # Step 1：HandLabeler
         hand_labels = self.hand_labeler.fit_predict(x_vec, y_vec, z_vec)
-        logger.info(f"[Pipeline] HandLabeler: L={int(np.sum(hand_labels=='L'))} "
+        logger.info(f"[Pipeline.fit] HandLabeler: L={int(np.sum(hand_labels=='L'))} "
                     f"R={int(np.sum(hand_labels=='R'))}")
 
         # Step 2：若未提供 labels，依模式產生
         if labels is None:
-            if cosine_features:
-                # Cosine feature 模式：KMeansClusterer.predict()
-                rd = results_dir or self.results_dir
-                if rd is None:
-                    raise ValueError(
-                        'cosine_features=True requires results_dir '
-                        '(KMeansClusterer model path)'
-                    )
-                logger.info(f"[Pipeline] KMeansClusterer.predict (cosine mode) from {rd}")
-                kc = KMeansClusterer(results_dir=rd)
-                kc.load_model(rd)
+            if model_dir is not None:
+                # Model 模式：KMeansClusterer.load_model() + predict()
+                logger.info(f"[Pipeline.fit] KMeansClusterer.load_model from {model_dir}")
+                kc = KMeansClusterer(results_dir=model_dir)
+                kc.load_model(model_dir)
                 labels = kc.predict(X)
                 k = kc.k
-                logger.info(f"[Pipeline] KMeansClusterer done: "
+                self._kmeans_loaded = True
+                self._kmeans_clusterer = kc
+                logger.info(f"[Pipeline.fit] KMeansClusterer.predict done: "
                             f"unique_labels={len(np.unique(labels))}, k={k}")
             else:
-                # Standard 模式：MiniBatchKMeans on raw 63D
-                logger.info(f"[Pipeline] MiniBatchKMeans (k={k}) on raw 63D...")
+                # Fallback：MiniBatchKMeans on raw 63D
+                logger.info(f"[Pipeline.fit] MiniBatchKMeans (k={k}) on raw 63D...")
                 scaler = StandardScaler()
                 X_scaled = scaler.fit_transform(X).astype(np.float64)
                 kmeans = MiniBatchKMeans(n_clusters=k, random_state=42, n_init=3)
                 labels = kmeans.fit_predict(X_scaled)
-                logger.info(f"[Pipeline] MiniBatchKMeans done, "
+                logger.info(f"[Pipeline.fit] MiniBatchKMeans done, "
                             f"labels range: {int(labels.min())}-{int(labels.max())}")
 
         self.labels = labels
-        self._k_used = k  # actual k used (may differ if loaded from model)
-        self.cosine_features = cosine_features
+        self._k_used = k
 
         # Step 3：TransitionCounter（傳入 delta_t, min_transitions）
         self.transition_counter.fit(labels, hand_labels, delta_t=delta_t, min_transitions=min_transitions)
         C = self.transition_counter.get_matrix()
-        logger.info(f"[Pipeline] TransitionCounter: C.shape={C.shape}")
+        logger.info(f"[Pipeline.fit] TransitionCounter: C.shape={C.shape}")
 
         # Step 4：SimilarityMatrix（支援 symmetrize）
         S = self.similarity_matrix.compute(C, symmetrize=symmetrize)
-        logger.info(f"[Pipeline] SimilarityMatrix: S.shape={S.shape}")
+        logger.info(f"[Pipeline.fit] SimilarityMatrix: S.shape={S.shape}")
 
         # Step 5：BigClusterer（傳入 tau）
         self.big_clusterer.fit(S, tau=tau)
         super_cluster_map = self.big_clusterer.get_clusters()
-        logger.info(f"[Pipeline] BigClusterer: N_clusters="
+        logger.info(f"[Pipeline.fit] BigClusterer: N_clusters="
                     f"{self.big_clusterer.n_clusters}")
 
         self._fitted = True
-        logger.info("[SuperClusterPipeline] 完整 pipeline 完成")
+        self._model_dir = model_dir
+        logger.info("[BigClusterPipeline.fit] 完成")
         return self
 
     def update(self, X: np.ndarray, x_vec: np.ndarray,
                y_vec: np.ndarray, z_vec: np.ndarray) -> 'BigClusterPipeline':
         """
-        吃一個 H5 的資料，累加進 TransitionCounter
-        不 compute S、不做 BigClusterer
+        吃一個 H5 的資料，累加進 TransitionCounter（C）。
+        Model 只 load 一次（lazy），之後 skip。
+        不 compute S、不做 BigClusterer（留給 finalize()）。
 
         Parameters
         ----------
@@ -598,25 +593,24 @@ class BigClusterPipeline:
         import sys
         sys.path.insert(0, str(Path(__file__).parent.parent.parent))
         from SLBHS.clustering.kmeans import KMeansClusterer
-        from SLBHS.clustering.feature_transform import compute_cosine_features
 
-        cosine_features = self.cosine_features
-        results_dir = self.results_dir
+        model_dir = self.model_dir
 
         # Step 1：HandLabeler
         hand_labels = self.hand_labeler.fit_predict(x_vec, y_vec, z_vec)
         logger.info(f"[Pipeline.update] HandLabeler: L={int(np.sum(hand_labels=='L'))} "
                     f"R={int(np.sum(hand_labels=='R'))}")
 
-        # Step 2：KMeans predict
-        if cosine_features:
-            rd = results_dir
-            if rd is None:
-                raise ValueError('cosine_features=True requires results_dir')
-            kc = KMeansClusterer(results_dir=rd)
-            kc.load_model(rd)
-            labels = kc.predict(X)
-            k = kc.k
+        # Step 2：KMeans predict（model 只 load 一次）
+        if model_dir is not None:
+            if not self._kmeans_loaded:
+                logger.info(f"[Pipeline.update] KMeansClusterer.load_model from {model_dir}")
+                kc = KMeansClusterer(results_dir=model_dir)
+                kc.load_model(model_dir)
+                self._kmeans_clusterer = kc
+                self._kmeans_loaded = True
+            labels = self._kmeans_clusterer.predict(X)
+            k = self._kmeans_clusterer.k
         else:
             k = self.k
             scaler = StandardScaler()

@@ -1,7 +1,9 @@
 """
-Tests for SLBHS Super Cluster Pipeline — 5 classes
+Tests for SLBHS Super Cluster Pipeline v3 — 5 classes
 
 H5 fixture: uses a real PTS H5 file for integration testing.
+Pipeline v3: 完全吃 K-Means model，不 training。
+
 All loops replaced with numpy vectorized operations.
 """
 import pytest
@@ -21,6 +23,9 @@ H5_PATH = (
     "2022_12_12_14_00_中央流行疫情指揮中心嚴重特殊傳染性肺炎記者會"
     "_crop---87414a0f-15ac-4b38-8710-15c43fa52793.h5"
 )
+
+MODEL_DIR = "/home/ubuntu/.openclaw/workspace-coding/SLBHS/SLBHS/results"
+
 
 @pytest.fixture(scope="module")
 def h5_data():
@@ -317,14 +322,13 @@ def test_bigclusterer_n_clusters_positive(labels_64, h5_data):
 def test_bigclusterpipeline_fitted_true(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
     pipeline = BigClusterPipeline(
-        k=64, tau=0.5, cosine_features=False, results_dir=None
+        k=64, tau=0.5, results_dir=None
     )
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        cosine_features=False,
         k=64,
     )
     assert pipeline._fitted is True
@@ -333,14 +337,13 @@ def test_bigclusterpipeline_fitted_true(h5_data):
 def test_bigclusterpipeline_s_no_nan(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
     pipeline = BigClusterPipeline(
-        k=64, tau=0.5, cosine_features=False, results_dir=None
+        k=64, tau=0.5, results_dir=None
     )
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        cosine_features=False,
         k=64,
     )
     S = pipeline.similarity_matrix.S
@@ -350,14 +353,13 @@ def test_bigclusterpipeline_s_no_nan(h5_data):
 def test_bigclusterpipeline_save_load(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
     pipeline = BigClusterPipeline(
-        k=64, tau=0.5, cosine_features=False, results_dir=None
+        k=64, tau=0.5, results_dir=None
     )
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        cosine_features=False,
         k=64,
     )
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -384,14 +386,13 @@ def test_bigclusterpipeline_save_load(h5_data):
 def test_bigclusterpipeline_tau_0_9_clusters(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
     pipeline = BigClusterPipeline(
-        k=64, tau=0.9, cosine_features=False, results_dir=None
+        k=64, tau=0.9, results_dir=None
     )
     pipeline.fit(
         h5_data["X"],
         h5_data["x_vec"],
         h5_data["y_vec"],
         h5_data["z_vec"],
-        cosine_features=False,
         k=64,
     )
     # tau=0.9 should produce at least 1 cluster
@@ -405,15 +406,7 @@ def test_bigclusterpipeline_tau_0_9_clusters(h5_data):
 # --------------------------------------------------------------------------
 
 def test_transitioncounter_update_accumulates(labels_64, h5_data):
-    """update() should accumulate C across multiple calls.
-    
-    Note: The accumulated C may differ from single fit() on concatenated data
-    at boundary transitions (last token of batch A → first token of batch B).
-    This is intentional — cross-batch transitions should NOT be counted because
-    each H5 is an independent video segment. The test checks that:
-    1. C grows (is accumulated, not overwritten)
-    2. Both batches together have >= non-zero entries than a single batch alone
-    """
+    """update() should accumulate C across multiple calls."""
     from SLBHS.clustering.super_cluster_pipeline import HandLabeler, TransitionCounter
     hl = HandLabeler()
     hand_labels = hl.fit_predict(
@@ -440,7 +433,6 @@ def test_transitioncounter_update_accumulates(labels_64, h5_data):
     tc_single = TransitionCounter(k=64, delta_t=1)
     tc_single.update(labels_a, hand_a)
     C_single = tc_single.get_matrix()
-    # The first half (update only A) must match fit() on A alone
     tc_fit_a = TransitionCounter(k=64, delta_t=1)
     tc_fit_a.fit(labels_a, hand_a)
     C_fit_a = tc_fit_a.get_matrix()
@@ -480,14 +472,14 @@ def test_pipeline_update_then_finalize_matches_fit(h5_data):
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
 
     # mode A: single fit()
-    pipe_fit = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe_fit = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
     pipe_fit.fit(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"],
-                 cosine_features=False, k=64, tau=0.9)
+                 k=64, tau=0.9)
     C_fit = pipe_fit.transition_counter.get_matrix()
     S_fit = pipe_fit.similarity_matrix.S
 
     # mode B: update() + finalize()
-    pipe_upd = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe_upd = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
     pipe_upd.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
     pipe_upd.finalize(tau=0.9)
     C_upd = pipe_upd.transition_counter.get_matrix()
@@ -501,7 +493,7 @@ def test_pipeline_update_then_finalize_matches_fit(h5_data):
 def test_pipeline_update_then_finalize_no_nan(h5_data):
     """S matrix from finalize() must not contain NaN."""
     from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
-    pipe = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
     pipe.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
     pipe.finalize(tau=0.9)
     S = pipe.similarity_matrix.S
@@ -522,7 +514,7 @@ def test_pipeline_update_twice_accumulates(h5_data):
     zv_a = h5_data["z_vec"][:N]
     zv_b = h5_data["z_vec"][N:2*N]
 
-    pipe = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe = BigClusterPipeline(k=64, tau=0.9, results_dir=None)
     pipe.update(X_a, xv_a, yv_a, zv_a)
     pipe.update(X_b, xv_b, yv_b, zv_b)
     pipe.finalize(tau=0.9)
@@ -531,6 +523,84 @@ def test_pipeline_update_twice_accumulates(h5_data):
     S = pipe.similarity_matrix.S
     assert np.sum(C > 0) > 0, "C is all zeros"
     assert np.sum(np.isnan(S)) == 0, "S contains NaN"
-    # C from two batches should have >= non-zero entries than single batch
-    # (we can't compare directly since kmeans predict differs per call, but at least check validity)
     assert pipe.big_clusterer.n_clusters >= 1
+
+
+# --------------------------------------------------------------------------
+# 8. BigClusterPipeline with model_dir (v3 — KMeans model only, no training)
+# --------------------------------------------------------------------------
+
+def test_pipeline_fit_with_model_dir(h5_data):
+    """fit() with model_dir should load pre-trained KMeans model and produce valid output."""
+    if not os.path.exists(MODEL_DIR):
+        pytest.skip(f"Model dir not found: {MODEL_DIR}")
+
+    from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+    pipeline = BigClusterPipeline(
+        k=1024, tau=0.9, model_dir=MODEL_DIR, results_dir=None
+    )
+    pipeline.fit(
+        h5_data["X"],
+        h5_data["x_vec"],
+        h5_data["y_vec"],
+        h5_data["z_vec"],
+    )
+
+    assert pipeline._fitted is True
+    assert pipeline._kmeans_loaded is True
+    assert pipeline._kmeans_clusterer is not None
+    S = pipeline.similarity_matrix.S
+    assert S is not None
+    assert np.sum(np.isnan(S)) == 0, "S contains NaN"
+    assert pipeline.big_clusterer.n_clusters >= 1
+
+
+def test_pipeline_update_with_model_dir_loads_once(h5_data):
+    """update() with model_dir should load model only on first call, reuse on subsequent."""
+    if not os.path.exists(MODEL_DIR):
+        pytest.skip(f"Model dir not found: {MODEL_DIR}")
+
+    from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+
+    N = h5_data["X"].shape[0] // 2
+    X_a = h5_data["X"][:N]
+    X_b = h5_data["X"][N:2*N]
+    xv_a = h5_data["x_vec"][:N]
+    xv_b = h5_data["x_vec"][N:2*N]
+    yv_a = h5_data["y_vec"][:N]
+    yv_b = h5_data["y_vec"][N:2*N]
+    zv_a = h5_data["z_vec"][:N]
+    zv_b = h5_data["z_vec"][N:2*N]
+
+    pipeline = BigClusterPipeline(k=1024, tau=0.9, model_dir=MODEL_DIR, results_dir=None)
+
+    # First update: model loads
+    pipeline.update(X_a, xv_a, yv_a, zv_a)
+    assert pipeline._kmeans_loaded is True
+    first_kmeans = pipeline._kmeans_clusterer
+
+    # Second update: model should be reused (same instance)
+    pipeline.update(X_b, xv_b, yv_b, zv_b)
+    assert pipeline._kmeans_loaded is True
+    assert pipeline._kmeans_clusterer is first_kmeans, "KMeansClusterer should be reused, not reloaded"
+
+    pipeline.finalize(tau=0.9)
+    S = pipeline.similarity_matrix.S
+    assert np.sum(np.isnan(S)) == 0, "S contains NaN after update+finalize with model_dir"
+
+
+def test_pipeline_update_finalize_with_model_dir_no_nan(h5_data):
+    """update()+finalize() with model_dir produces valid S without NaN."""
+    if not os.path.exists(MODEL_DIR):
+        pytest.skip(f"Model dir not found: {MODEL_DIR}")
+
+    from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+    pipeline = BigClusterPipeline(k=1024, tau=0.9, model_dir=MODEL_DIR, results_dir=None)
+    pipeline.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
+    pipeline.finalize(tau=0.9)
+
+    S = pipeline.similarity_matrix.S
+    C = pipeline.transition_counter.get_matrix()
+    assert np.sum(np.isnan(S)) == 0, "S contains NaN"
+    assert np.sum(np.isnan(C)) == 0, "C contains NaN"
+    assert pipeline.big_clusterer.n_clusters >= 1

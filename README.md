@@ -1,6 +1,22 @@
-# SLBHS — Sign Language Big Cluster Pipeline
+# SLBHS — Sign Language Basic Handshapes
 
-Train K-Means on hand-pose tokens, then collapse noisy classes into Super Clusters via temporal transition similarity.
+Hand pose clustering pipelines for sign language basic handshapes.
+
+## Installation
+
+### Install directly from GitHub (no local clone needed)
+
+```bash
+pip install git+https://github.com/miles0428/SLBHS.git
+```
+
+### Clone and install locally (recommended when developing)
+
+```bash
+git clone https://github.com/miles0428/SLBHS.git
+cd SLBHS
+pip install .
+```
 
 ## Quick Start
 

@@ -49,4 +49,19 @@ file_crop---xxxxxxxxxx.h5
 
 ## Documentation
 
-Detailed docs → `docs/`
+## Author
+
+Yu-Cheng Chung
+
+## License
+
+This project is for research use only. See `LICENSE` file for details.
+
+Permitted:
+- Use code to train your own models
+
+Prohibited:
+- Use pretrained models or outputs to train other models
+- Commercial use
+
+For commercial licensing, contact the author.

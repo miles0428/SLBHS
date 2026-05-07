@@ -437,8 +437,12 @@ class KMeansClusterer:
         if not has_model:
             raise RuntimeError('Must call load_model() or fit* before predict()')
 
-        # Cosine feature mode: scale raw (63D) + cosine features (15D) → concat → predict
+        # Cosine feature mode: scale raw (63D), weight cosine features (15D) by 3, then concat → predict
         if getattr(self, 'feature_type', None) == 'cosine':
+            if X_new.ndim != 2 or X_new.shape[1] != 63:
+                raise ValueError(
+                    f'X_new must have shape (M, 63) for cosine predict; got shape {X_new.shape}'
+                )
             if not hasattr(self, 'scaler') or self.scaler is None:
                 raise RuntimeError('scaler not found for cosine predict; ensure fit_cosine_minibatch was called with scaler argument')
             X_raw_scaled = self.scaler.transform(X_new)
@@ -447,7 +451,7 @@ class KMeansClusterer:
                 X_raw_scaled = X_raw_scaled.astype(np.float64)
             if X_cosine.dtype != np.float64:
                 X_cosine = X_cosine.astype(np.float64)
-            X_combined = np.hstack([X_raw_scaled, X_cosine])
+            X_combined = np.hstack([X_raw_scaled, X_cosine * 3])
             return self.km.predict(X_combined)
 
         # Standard mode: scaler transform

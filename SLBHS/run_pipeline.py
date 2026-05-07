@@ -44,6 +44,7 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s"
 )
 logger = logging.getLogger(__name__)
+H5_CHUNK_SIZE = 200_000
 
 
 def parse_args():
@@ -165,9 +166,8 @@ def main():
             logger.info(f"  Processing {h5_path.name} ...")
             with h5py.File(h5_path) as f:
                 total = f["aligned_63d"].shape[0]
-                chunk_size = 200_000
-                for start in range(0, total, chunk_size):
-                    end = min(start + chunk_size, total)
+                for start in range(0, total, H5_CHUNK_SIZE):
+                    end = min(start + H5_CHUNK_SIZE, total)
                     X = f['aligned_63d'][start:end].astype(np.float32)
                     x_vec = f['x_vec'][start:end].astype(np.float32)
                     y_vec = f['y_vec'][start:end].astype(np.float32)

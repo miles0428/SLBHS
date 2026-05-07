@@ -99,15 +99,21 @@ class TransitionCounter:
     建立轉移矩陣（框架，Phase 2 實作）
     
     遍歷 Left_Track / Right_Track，
-    僅選取同手、Δt ≤ 2 的相鄰 Token 對（T_n, T_{n+k}），
+    僅選取同手、Δt ≤ delta_t 的相鄰 Token 對（T_n, T_{n+k}），
     C[T_n, T_{n+k}] += 1
+    
+    可過濾：min_transitions — 低於此轉移次數的 Token 會被忽略
     """
 
-    def __init__(self, k: int = 1024):
+    def __init__(self, k: int = 1024, delta_t: int = 1, min_transitions: int = 0):
         self.k = k
+        self.delta_t = delta_t
+        self.min_transitions = min_transitions
         self.M: Optional[np.ndarray] = None  # (1024, 1024) 機率矩陣
 
-    def fit(self, labels: np.ndarray, hand_labels: np.ndarray) -> 'TransitionCounter':
+    def fit(self, labels: np.ndarray, hand_labels: np.ndarray,
+            delta_t: Optional[int] = None,
+            min_transitions: Optional[int] = None) -> 'TransitionCounter':
         """
         建立左右手各自的 Token 轉移矩陣
 
@@ -125,6 +131,9 @@ class TransitionCounter:
         -------
         self
         """
+        delta_t = delta_t if delta_t is not None else self.delta_t
+        min_transitions = min_transitions if min_transitions is not None else self.min_transitions
+
         k = self.k
         C = np.zeros((k, k), dtype=np.float64)
 
@@ -136,20 +145,28 @@ class TransitionCounter:
         right_track = labels[right_mask]         # (N_right,)
 
         def _count_transitions(track: np.ndarray, C: np.ndarray) -> np.ndarray:
-            """統計同一軌道上、相鄰（Δt=1）的 Token 轉移"""
-            # 只取 Δt = 1（即連續兩幀）
-            for i in range(len(track) - 1):
+            """
+            統計同一軌道上、相鄰（Δt = delta_t）的 Token 轉移
+            
+            過濾：低於 min_transitions 次的 Token 會被忽略
+            """
+            # 只取 Δt = delta_t（即跳過 delta_t-1 幀）
+            for i in range(len(track) - delta_t):
                 t_from = int(track[i])
-                t_to = int(track[i + 1])
+                t_to = int(track[i + delta_t])
                 C[t_from, t_to] += 1
             return C
 
         _count_transitions(left_track, C)
         _count_transitions(right_track, C)
 
+        # 過濾：低於 min_transitions 的 Token 對清除為 0
+        if min_transitions > 0:
+            C[C < min_transitions] = 0
+
         self.C = C
-        logger.info(f"[TransitionCounter] C.shape={C.shape}, "
-                    f"nnz={int(np.sum(C > 0))}, max={C.max():.0f}")
+        logger.info(f"[TransitionCounter] delta_t={delta_t}, min_transitions={min_transitions}, "
+                    f"C.shape={C.shape}, nnz={int(np.sum(C > 0))}, max={C.max():.0f}")
         return self
 
     def get_matrix(self) -> np.ndarray:
@@ -169,18 +186,19 @@ class SimilarityMatrix:
     def __init__(self):
         self.S: Optional[np.ndarray] = None
 
-    def compute(self, M: np.ndarray) -> np.ndarray:
+    def compute(self, M: np.ndarray, symmetrize: bool = True) -> np.ndarray:
         """
         從 TransitionCounter 的 C 矩陣計算相似度矩陣 S
 
         步驟：
-        1. 對稱化：W = (C + C.T) / 2
+        1. 對稱化：W = (C + C.T) / 2（若 symmetrize=True）
         2. 列歸一化：M_ij = W_ij / Σ_k(W_ik)  → 機率矩陣
         3. Cosine Similarity：S_ij = cos(M_i, M_j)
 
         Parameters
         ----------
         M : (1024, 1024) 原始轉移計數矩陣 C
+        symmetrize : bool — 是否對稱化（預設 True）
 
         Returns
         -------
@@ -188,8 +206,11 @@ class SimilarityMatrix:
         """
         from sklearn.metrics.pairwise import cosine_similarity
 
-        # 1. 對稱化
-        W = (M + M.T) / 2.0
+        # 1. 對稱化（可選）
+        if symmetrize:
+            W = (M + M.T) / 2.0
+        else:
+            W = M.copy()
 
         # 2. 列歸一化（row-wise，即對每列 i，將其所有出現在 j 的次數 normalize）
         row_sums = W.sum(axis=1, keepdims=True)  # (1024, 1)
@@ -225,7 +246,7 @@ class BigClusterer:
         self.tau = tau
         self.cluster_map: Optional[dict] = None
 
-    def fit(self, S: np.ndarray) -> 'BigClusterer':
+    def fit(self, S: np.ndarray, tau: Optional[float] = None) -> 'BigClusterer':
         """
         從相似度矩陣 S 提取 Super Clusters
 
@@ -242,7 +263,7 @@ class BigClusterer:
         from scipy.sparse import csr_matrix
         from scipy.sparse.csgraph import connected_components
 
-        tau = self.tau
+        tau = tau if tau is not None else self.tau
         n = S.shape[0]
 
         # 建稀疏邻接矩阵：S_ij > tau → 1
@@ -289,12 +310,25 @@ class BigClusterPipeline:
     5. ClusterExtractor.fit(S, tau) → super_cluster_map
     """
 
-    def __init__(self, k: int = 1024, tau: float = 0.9, results_dir: Optional[str] = None):
+    def __init__(
+        self,
+        k: int = 512,                    # K-Means 群數
+        tau: float = 0.9,                # BigClusterer threshold (0.0-1.0)
+        delta_t: int = 1,                # 轉移間隔 (n → n+delta_t)
+        cosine_features: bool = True,    # 是否用 cosine feature
+        min_transitions: int = 0,        # 最小轉移次數（低於此則忽略）
+        symmetrize: bool = True,         # 是否對稱化
+        results_dir: Optional[str] = None,
+    ):
         self.k = k
         self.tau = tau
+        self.delta_t = delta_t
+        self.cosine_features = cosine_features
+        self.min_transitions = min_transitions
+        self.symmetrize = symmetrize
         self.results_dir = results_dir
         self.hand_labeler = HandLabeler()
-        self.transition_counter = TransitionCounter(k=k)
+        self.transition_counter = TransitionCounter(k=k, delta_t=delta_t, min_transitions=min_transitions)
         self.similarity_matrix = SimilarityMatrix()
         self.big_clusterer = BigClusterer(tau=tau)  # 原 ClusterExtractor，更名以區分於 HierarchicalVisualizer
         self._fitted = False
@@ -302,9 +336,13 @@ class BigClusterPipeline:
     def fit(self, X: np.ndarray, x_vec: np.ndarray,
             y_vec: np.ndarray, z_vec: np.ndarray,
             labels: Optional[np.ndarray] = None,
-            k: int = 1024, tau: float = 0.9,
-            cosine_features: bool = False,
-            results_dir: Optional[str] = None) -> 'SuperClusterPipeline':
+            k: Optional[int] = None,
+            tau: Optional[float] = None,
+            cosine_features: Optional[bool] = None,
+            min_transitions: Optional[int] = None,
+            delta_t: Optional[int] = None,
+            symmetrize: Optional[bool] = None,
+            results_dir: Optional[str] = None) -> 'BigClusterPipeline':
         """
         串接 Phase 2 完整 pipeline
 
@@ -338,7 +376,18 @@ class BigClusterPipeline:
         from SLBHS.clustering.kmeans import KMeansClusterer
         from SLBHS.clustering.feature_transform import compute_cosine_features
 
-        logger.info(f"[SuperClusterPipeline] cosine_features={cosine_features}, k={k}")
+        # 解析參數（優先使用傳入值，否則用實例變數）
+        k = k if k is not None else self.k
+        tau = tau if tau is not None else self.tau
+        cosine_features = cosine_features if cosine_features is not None else self.cosine_features
+        min_transitions = min_transitions if min_transitions is not None else self.min_transitions
+        delta_t = delta_t if delta_t is not None else self.delta_t
+        symmetrize = symmetrize if symmetrize is not None else self.symmetrize
+        results_dir = results_dir if results_dir is not None else self.results_dir
+
+        logger.info(f"[BigClusterPipeline] cosine_features={cosine_features}, k={k}, "
+                    f"tau={tau}, delta_t={delta_t}, min_transitions={min_transitions}, "
+                    f"symmetrize={symmetrize}")
 
         # Step 1：HandLabeler
         hand_labels = self.hand_labeler.fit_predict(x_vec, y_vec, z_vec)
@@ -376,17 +425,17 @@ class BigClusterPipeline:
         self._k_used = k  # actual k used (may differ if loaded from model)
         self.cosine_features = cosine_features
 
-        # Step 3：TransitionCounter
-        self.transition_counter.fit(labels, hand_labels)
+        # Step 3：TransitionCounter（傳入 delta_t, min_transitions）
+        self.transition_counter.fit(labels, hand_labels, delta_t=delta_t, min_transitions=min_transitions)
         C = self.transition_counter.get_matrix()
         logger.info(f"[Pipeline] TransitionCounter: C.shape={C.shape}")
 
-        # Step 4：SimilarityMatrix
-        S = self.similarity_matrix.compute(C)
+        # Step 4：SimilarityMatrix（支援 symmetrize）
+        S = self.similarity_matrix.compute(C, symmetrize=symmetrize)
         logger.info(f"[Pipeline] SimilarityMatrix: S.shape={S.shape}")
 
-        # Step 5：BigClusterer（原 ClusterExtractor，根據相似度矩陣分群）
-        self.big_clusterer.fit(S)
+        # Step 5：BigClusterer（傳入 tau）
+        self.big_clusterer.fit(S, tau=tau)
         super_cluster_map = self.big_clusterer.get_clusters()
         logger.info(f"[Pipeline] BigClusterer: N_clusters="
                     f"{self.big_clusterer.n_clusters}")

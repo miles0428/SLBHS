@@ -1,16 +1,47 @@
 """
-Super Cluster Pipeline — Phase 1
-超級分類 pipeline 的 OOP 架構
+Super Cluster Pipeline — Phase 2
 
-建立以下 class：
-- HandLabeler：從 wrist_px x 座標推斷 L/R（已實作）
-- TransitionCounter：建立轉移矩陣（框架，Phase 2 實作）
-- SimilarityMatrix：計算相似度矩陣（框架，Phase 2 實作）
-- ClusterExtractor：Super Cluster Extraction（框架，Phase 2 實作）
-- SuperClusterPipeline：串接全部，一鍵產出（框架，Phase 2 串接）
+超級分類 pipeline 的 OOP 架構：從時序轉移相似度找出物理等價的手型群組。
 
 作者：execution-agent（為 PM 打工）
 日期：2026-05-07
+
+ Classes
+--------
+HandLabeler       : 從 wrist_px x 座標推斷 L/R（根據 vec_x × vec_y dot vec_z）
+TransitionCounter : 建立 Token 轉移矩陣 C[1024×1024]（分左右手加總）
+SimilarityMatrix  : 從 C 計算相似度矩陣 S（列歸一化 + Cosine Similarity）
+BigClusterer      : 根據 S_ij > tau 建邊，用 Connected Components 分群
+BigClusterPipeline: 串接全部，一鍵產出 Phase 2 結果
+
+ Validation Criteria
+--------------------
+產出：
+  - results/similarity_matrix.npy  — S (1024, 1024)，無 NaN
+  - results/transition_matrix.npy  — C (1024, 1024)
+  - results/symmetrized_matrix.npy — W (1024, 1024)
+  - results/super_cluster_map.json — {token_id: super_cluster_id}
+  - results/pipeline_phase2.json  — Phase 2 完整摘要
+
+異常指標：出現 "Error" / "NaN" → 失敗
+
+ Example
+--------
+>>> import h5py
+>>> from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+
+>>> with h5py.File('file.h5', 'r') as f:
+...     X = f['aligned_63d'][:]
+...     x_vec = f['x_vec'][:]
+...     y_vec = f['y_vec'][:]
+...     z_vec = f['z_vec'][:]
+
+>>> pipeline = BigClusterPipeline(k=512, tau=0.9, cosine_features=True, results_dir='results')
+>>> pipeline.fit(X, x_vec, y_vec, z_vec, cosine_features=True, results_dir='results')
+>>> pipeline.save('results')
+
+>>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
+Super Clusters: 42
 """
 
 import numpy as np
@@ -96,20 +127,36 @@ class HandLabeler:
 
 class TransitionCounter:
     """
-    建立 Token 轉移矩陣
+    建立 Token 轉移矩陣 C[1024×1024]。
 
-    遍歷 Left_Track / Right_Track（已按時間排序），
-    對每個 Token_i，往前看 delta_t 步：i→i+1, i→i+2, ..., i→i+delta_t
+    遍歷 Left_Track / Right_Track（已按時間排序），對每個 Token_i，
+    往前看 delta_t 步：i→i+1, i→i+2, ..., i→i+delta_t
     每個符合的 pair 都 C[T_i, T_{i+k}] += 1（k=1~delta_t）
 
     可過濾：min_transitions — 低於此轉移次數的 Token 對清除為 0
+
+    Example
+    -------
+    >>> counter = TransitionCounter(k=1024, delta_t=1, min_transitions=5)
+    >>> counter.fit(token_ids, hand_labels, delta_t=1, min_transitions=5)
+    >>> C = counter.get_matrix()  # (1024, 1024)
     """
 
     def __init__(self, k: int = 1024, delta_t: int = 1, min_transitions: int = 0):
+        """
+        Parameters
+        ----------
+        k : int
+            Token 總數（通常 = K-Means k，預設 1024）。
+        delta_t : int
+            往前看多少步（預設 1，只算連續兩幀）。
+        min_transitions : int
+            最低轉移次數（低於此的 Token 對清除為 0）。
+        """
         self.k = k
         self.delta_t = delta_t
         self.min_transitions = min_transitions
-        self.M: Optional[np.ndarray] = None  # (1024, 1024) 機率矩陣
+        self.C: Optional[np.ndarray] = None  # (1024, 1024) 機率矩陣
 
     def fit(self, labels: np.ndarray, hand_labels: np.ndarray,
             delta_t: Optional[int] = None,
@@ -148,23 +195,13 @@ class TransitionCounter:
         left_track = labels[left_mask]          # (N_left,)
         right_track = labels[right_mask]         # (N_right,)
 
-        def _count_transitions(track: np.ndarray, C: np.ndarray) -> np.ndarray:
-            """
-            統計同一軌道上、往前 delta_t 步的所有 Token 轉移
-
-            對每個 Token_i，檢查 i→i+1, i→i+2, ..., i→i+delta_t
-            每個符合的 pair 都 C[Token_i, Token_{i+k}] += 1（k=1~delta_t）
-
-            向量化實作：對每個 k，統計 track[:-k] → track[k:] 的轉移
-            """
-            for k in range(1, delta_t + 1):
-                from_tokens = track[:-k]  # (N-k,)
-                to_tokens = track[k:]      # (N-k,)
-                np.add.at(C, (from_tokens, to_tokens), 1)
-            return C
-
-        _count_transitions(left_track, C)
-        _count_transitions(right_track, C)
+        # 收集所有 k 值的所有 pair，用 np.add.at 一次計入
+        for track in (left_track, right_track):
+            from_tokens_list = [track[:-k] for k in range(1, delta_t + 1)]
+            to_tokens_list   = [track[k:]   for k in range(1, delta_t + 1)]
+            from_all = np.concatenate(from_tokens_list)
+            to_all   = np.concatenate(to_tokens_list)
+            np.add.at(C, (from_all, to_all), 1)
 
         # 過濾：低於 min_transitions 的 Token 對清除為 0
         if min_transitions > 0:
@@ -176,6 +213,12 @@ class TransitionCounter:
         return self
 
     def get_matrix(self) -> np.ndarray:
+        """
+        Returns
+        -------
+        C : np.ndarray (k, k)
+            轉移計數矩陣（未歸一化）。
+        """
         if self.C is None:
             raise RuntimeError("TransitionCounter must be fitted first")
         return self.C
@@ -183,13 +226,26 @@ class TransitionCounter:
 
 class SimilarityMatrix:
     """
-    計算相似度矩陣（框架，Phase 2 實作）
-    
-    M: (1024, 1024) 機率矩陣
-    輸出：S (1024, 1024) cosine similarity
+    計算相似度矩陣 S = cosine(M_prob)。
+
+    輸入：C[1024×1024] 轉移計數矩陣
+    輸出：S[1024×1024] cosine similarity
+
+    流程：
+        1. 對稱化：W = (C + C.T) / 2（若 symmetrize=True）
+        2. 列歸一化：M_ij = W_ij / Σ_k(W_ik) → 機率矩陣
+        3. Cosine Similarity：S_ij = cos(M_i, M_j)
+
+    Example
+    -------
+    >>> sim = SimilarityMatrix()
+    >>> S = sim.compute(C, symmetrize=True)
+    >>> S.shape
+    (1024, 1024)
     """
 
     def __init__(self):
+        """初始化，無需參數。"""
         self.S: Optional[np.ndarray] = None
 
     def compute(self, M: np.ndarray, symmetrize: bool = True) -> np.ndarray:
@@ -245,7 +301,13 @@ class BigClusterer:
 
     策略：S_ij > tau 時建邊，用 Connected Components 分群。
 
-    （原名 ClusterExtractor，2026-05-07 更名以區分於 HierarchicalVisualizer）
+    Example
+    -------
+    >>> clusterer = BigClusterer(tau=0.9)
+    >>> clusterer.fit(S, tau=0.9)
+    >>> cluster_map = clusterer.get_clusters()  # {token_id: super_cluster_id}
+    >>> print(f"N_clusters={clusterer.n_clusters}")
+    N_clusters=42
     """
 
     def __init__(self, tau: float = 0.9):
@@ -284,12 +346,9 @@ class BigClusterer:
         # Connected Components
         n_components, labels = connected_components(adj, directed=False)
 
-        # 建立 super_cluster_map
-        super_cluster_map = {}
-        for comp_id in range(n_components):
-            members = np.where(labels == comp_id)[0]
-            for token_id in members:
-                super_cluster_map[int(token_id)] = int(comp_id)
+        # 向量化建 dict：labels[i] = component_id of token i
+        # O(n) 一次走完，無演算法層面的迴圈
+        super_cluster_map = {int(t): int(labels[t]) for t in range(n)}
 
         self.cluster_map = super_cluster_map
         self.n_clusters = n_components
@@ -306,14 +365,22 @@ class BigClusterer:
 
 class BigClusterPipeline:
     """
-    串接全部，一鍵產出
+    串接全部，一鍵產出 Phase 2 Super Cluster 結果。
 
     內部流程：
-    1. HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
-    2. KMeans → labels（cosine_features 模式切換）
-    3. TransitionCounter.fit(labels, hand_labels) → C
-    4. SimilarityMatrix.compute(C) → S
-    5. ClusterExtractor.fit(S, tau) → super_cluster_map
+        1. HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
+        2. KMeans → labels（cosine_features 模式切換）
+        3. TransitionCounter.fit(labels, hand_labels) → C
+        4. SimilarityMatrix.compute(C) → S
+        5. BigClusterer.fit(S, tau) → super_cluster_map
+
+    Example
+    -------
+    >>> pipeline = BigClusterPipeline(k=512, tau=0.9, cosine_features=True, results_dir='results')
+    >>> pipeline.fit(X, x_vec, y_vec, z_vec, cosine_features=True, results_dir='results')
+    >>> pipeline.save('results')
+    >>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
+    Super Clusters: 42
     """
 
     def __init__(
@@ -326,6 +393,26 @@ class BigClusterPipeline:
         symmetrize: bool = True,         # 是否對稱化
         results_dir: Optional[str] = None,
     ):
+        """
+        Parameters
+        ----------
+        k : int
+            K-Means 群數。
+        tau : float
+            相似度閾值（0.0-1.0），S_ij > tau → 建邊。
+        delta_t : int
+            轉移間隔，統計 n → n+delta_t 的轉移。
+        cosine_features : bool
+            是否使用 cosine feature 模式。
+            True：StandardScaler + cosine(15D) → concat(78D) → KMeansClusterer.predict
+            False：直接用 aligned_63d (N,63) → MiniBatchKMeans
+        min_transitions : int
+            最低轉移次數，低於此的 Token 對清除為 0。
+        symmetrize : bool
+            是否對稱化轉移矩陣（預設 True）。
+        results_dir : str or None
+            KMeansClusterer 模型路徑（cosine_features=True 時必要）。
+        """
         self.k = k
         self.tau = tau
         self.delta_t = delta_t

@@ -94,7 +94,9 @@ def parse_args():
         '--k',
         type=int,
         default=1024,
-        help='K-Means number of clusters. Default: 1024'
+        help='K-Means number of clusters. Only used when --model-dir is NOT provided. '
+             'When --model-dir is provided, k is determined by the model\'s meta.json and this argument is ignored.',
+        dest='k'
     )
     parser.add_argument(
         '--tau',
@@ -144,9 +146,19 @@ def main():
     if args.model_dir is None:
         logger.warning("--model-dir not specified; will use MiniBatchKMeans fallback (no pre-trained model)")
 
+    # Conflict check: when model_dir is provided, --k is meaningless
+    if args.model_dir is not None and args.k != 1024:
+        raise ValueError(
+            f"--k={args.k} conflicts with --model-dir: "
+            f"when --model-dir is provided, k is determined by the model's meta.json, "
+            f"and CLI --k is ignored. Remove --k or use --model-dir without --k."
+        )
+    if args.model_dir is not None:
+        logger.info(f"[run_pipeline] --model-dir provided: k will be read from model meta.json (CLI --k is ignored)")
+
     # Common parameters
     common_kwargs = dict(
-        k=args.k,
+        k=args.k,  # used only when model_dir=None (MiniBatchKMeans fallback)
         tau=args.tau,
         delta_t=args.delta_t,
         min_transitions=args.min_transitions,

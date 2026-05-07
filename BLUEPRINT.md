@@ -55,6 +55,34 @@
 
 ---
 
+## Pipeline（批次多 H5 模式）
+
+支援一次處理多個 H5 檔案，累加轉移矩陣後再 compute S + BigClusterer。
+
+### 流程：
+```
+for each H5:
+    pipeline.update(X, x_vec, y_vec, z_vec)  # 累加進 TransitionCounter.C
+pipeline.finalize(tau)                        # compute S + BigClusterer
+pipeline.save(results_dir)                    # 寫出產出
+```
+
+### update() — 累加 C（不改變其他狀態）
+- HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
+- KMeansClusterer.predict(X) → labels（cosine_features 模式）
+- TransitionCounter.update(labels, hand_labels) → 累加進 self.C
+
+### finalize() — 計算 S + BigClusterer
+- SimilarityMatrix.compute(C) → S
+- BigClusterer.fit(S, tau) → super_cluster_map
+
+### CLI 使用方式：
+```bash
+python run_pipeline.py --folder /path/to/h5_folder --k 1024 --tau 0.9 --delta-t 10 --cosine-features --results-dir results
+```
+
+---
+
 ## OOP 架構
 
 ### Class 一覽表

@@ -398,3 +398,139 @@ def test_bigclusterpipeline_tau_0_9_clusters(h5_data):
     assert pipeline.big_clusterer.n_clusters >= 1
     # Every token must be mapped
     assert len(pipeline.big_clusterer.cluster_map) == 64
+
+
+# --------------------------------------------------------------------------
+# 6. TransitionCounter.update() — incremental batch update
+# --------------------------------------------------------------------------
+
+def test_transitioncounter_update_accumulates(labels_64, h5_data):
+    """update() should accumulate C across multiple calls.
+    
+    Note: The accumulated C may differ from single fit() on concatenated data
+    at boundary transitions (last token of batch A → first token of batch B).
+    This is intentional — cross-batch transitions should NOT be counted because
+    each H5 is an independent video segment. The test checks that:
+    1. C grows (is accumulated, not overwritten)
+    2. Both batches together have >= non-zero entries than a single batch alone
+    """
+    from SLBHS.clustering.super_cluster_pipeline import HandLabeler, TransitionCounter
+    hl = HandLabeler()
+    hand_labels = hl.fit_predict(
+        h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"]
+    )
+    N = len(labels_64) // 2
+    labels_a = labels_64[:N]
+    labels_b = labels_64[N:2*N]
+    hand_a = hand_labels[:N]
+    hand_b = hand_labels[N:2*N]
+
+    # Two sequential update() calls should accumulate
+    tc = TransitionCounter(k=64, delta_t=1)
+    tc.update(labels_a, hand_a)
+    C1 = tc.get_matrix().copy()
+    tc.update(labels_b, hand_b)
+    C2 = tc.get_matrix()
+    # After second update, we expect MORE or EQUAL non-zero entries (accumulation)
+    assert np.sum(C2 > 0) >= np.sum(C1 > 0), "C did not grow on second update"
+    # C2 should be >= C1 element-wise (no overwriting)
+    assert np.all(C2 >= C1 - 1e-9), "Second update overwrote instead of accumulating"
+
+    # Compare with single-batch fit() — within-batch counts should match exactly
+    tc_single = TransitionCounter(k=64, delta_t=1)
+    tc_single.update(labels_a, hand_a)
+    C_single = tc_single.get_matrix()
+    # The first half (update only A) must match fit() on A alone
+    tc_fit_a = TransitionCounter(k=64, delta_t=1)
+    tc_fit_a.fit(labels_a, hand_a)
+    C_fit_a = tc_fit_a.get_matrix()
+    np.testing.assert_allclose(C_single, C_fit_a, rtol=1e-10, atol=1e-10)
+
+
+def test_transitioncounter_update_no_overwrite(labels_64, h5_data):
+    """Second update() call should ADD to existing C, not overwrite."""
+    from SLBHS.clustering.super_cluster_pipeline import TransitionCounter, HandLabeler
+    hl = HandLabeler()
+    hand_labels = hl.fit_predict(
+        h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"]
+    )
+    N = len(labels_64) // 2
+    labels_a = labels_64[:N]
+    labels_b = labels_64[N:2*N]
+    hand_a = hand_labels[:N]
+    hand_b = hand_labels[N:2*N]
+
+    tc = TransitionCounter(k=64, delta_t=1)
+    tc.update(labels_a, hand_a)
+    C1 = tc.get_matrix().copy()
+    tc.update(labels_b, hand_b)
+    C2 = tc.get_matrix()
+    # C2 should have MORE non-zero entries than C1
+    assert np.sum(C2 > 0) >= np.sum(C1 > 0)
+    # C2 >= C1 element-wise (accumulation)
+    assert np.all(C2 >= C1 - 1e-9)
+
+
+# --------------------------------------------------------------------------
+# 7. BigClusterPipeline.update() + finalize() — batch pipeline
+# --------------------------------------------------------------------------
+
+def test_pipeline_update_then_finalize_matches_fit(h5_data):
+    """update()+finalize() should give identical C and S as fit()."""
+    from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+
+    # mode A: single fit()
+    pipe_fit = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe_fit.fit(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"],
+                 cosine_features=False, k=64, tau=0.9)
+    C_fit = pipe_fit.transition_counter.get_matrix()
+    S_fit = pipe_fit.similarity_matrix.S
+
+    # mode B: update() + finalize()
+    pipe_upd = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe_upd.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
+    pipe_upd.finalize(tau=0.9)
+    C_upd = pipe_upd.transition_counter.get_matrix()
+    S_upd = pipe_upd.similarity_matrix.S
+
+    np.testing.assert_allclose(C_fit, C_upd, rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(S_fit, S_upd, rtol=1e-10, atol=1e-10)
+    assert pipe_fit.big_clusterer.n_clusters == pipe_upd.big_clusterer.n_clusters
+
+
+def test_pipeline_update_then_finalize_no_nan(h5_data):
+    """S matrix from finalize() must not contain NaN."""
+    from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+    pipe = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe.update(h5_data["X"], h5_data["x_vec"], h5_data["y_vec"], h5_data["z_vec"])
+    pipe.finalize(tau=0.9)
+    S = pipe.similarity_matrix.S
+    assert np.sum(np.isnan(S)) == 0, "S contains NaN after finalize()"
+    assert np.sum(np.isnan(pipe.transition_counter.get_matrix())) == 0, "C contains NaN"
+
+
+def test_pipeline_update_twice_accumulates(h5_data):
+    """Two update() calls should accumulate C, and finalize() at end."""
+    from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
+    N = h5_data["X"].shape[0] // 2
+    X_a = h5_data["X"][:N]
+    X_b = h5_data["X"][N:2*N]
+    xv_a = h5_data["x_vec"][:N]
+    xv_b = h5_data["x_vec"][N:2*N]
+    yv_a = h5_data["y_vec"][:N]
+    yv_b = h5_data["y_vec"][N:2*N]
+    zv_a = h5_data["z_vec"][:N]
+    zv_b = h5_data["z_vec"][N:2*N]
+
+    pipe = BigClusterPipeline(k=64, tau=0.9, cosine_features=False, results_dir=None)
+    pipe.update(X_a, xv_a, yv_a, zv_a)
+    pipe.update(X_b, xv_b, yv_b, zv_b)
+    pipe.finalize(tau=0.9)
+
+    C = pipe.transition_counter.get_matrix()
+    S = pipe.similarity_matrix.S
+    assert np.sum(C > 0) > 0, "C is all zeros"
+    assert np.sum(np.isnan(S)) == 0, "S contains NaN"
+    # C from two batches should have >= non-zero entries than single batch
+    # (we can't compare directly since kmeans predict differs per call, but at least check validity)
+    assert pipe.big_clusterer.n_clusters >= 1

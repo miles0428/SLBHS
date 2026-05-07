@@ -37,7 +37,7 @@ def parse_args():
         epilog="""
 範例：
   python run_pipeline.py --h5 /path/to/file.h5 --k 512 --tau 0.9
-  python run_pipeline.py --h5 /path/to/file.h5 --k 512 --tau 0.9 --cosine-features --results-dir results
+  python run_pipeline.py --folder /path/to/h5_folder --k 512 --tau 0.9 --cosine-features --results-dir results
   python run_pipeline.py --h5 /path/to/file.h5 --skip-kmeans --results-dir results
         """
     )
@@ -47,6 +47,13 @@ def parse_args():
         default=None,
         help='Path to H5 file (or glob pattern with *). '
              'Default: reads from data_dir.'
+    )
+    parser.add_argument(
+        '--folder',
+        type=str,
+        default=None,
+        help='Path to folder containing multiple H5 files. '
+             'Batch processes all *.h5 files, computing S and BigClusterer at the end.'
     )
     parser.add_argument(
         '--data-dir',
@@ -63,8 +70,8 @@ def parse_args():
     parser.add_argument(
         '--k',
         type=int,
-        default=512,
-        help='K-Means number of clusters. Default: 512'
+        default=1024,
+        help='K-Means number of clusters. Default: 1024'
     )
     parser.add_argument(
         '--tau',
@@ -75,8 +82,8 @@ def parse_args():
     parser.add_argument(
         '--delta-t',
         type=int,
-        default=1,
-        help='Transition interval (n → n+delta_t). Default: 1'
+        default=10,
+        help='Transition interval (n → n+delta_t). Default: 10'
     )
     parser.add_argument(
         '--min-transitions',
@@ -170,53 +177,104 @@ def main():
         logging.getLogger().setLevel(logging.DEBUG)
 
     # Load data
-    if args.h5:
+    if args.folder:
+        # Folder mode: batch process all H5 files, finalize at the end
+        h5_files = sorted(Path(args.folder).glob("*.h5"))
+        if not h5_files:
+            raise FileNotFoundError(f"No *.h5 files found in: {args.folder}")
+        logger.info(f"Found {len(h5_files)} H5 files in {args.folder}")
+
+        pipeline = BigClusterPipeline(
+            k=args.k,
+            tau=args.tau,
+            delta_t=args.delta_t,
+            min_transitions=args.min_transitions,
+            symmetrize=args.symmetrize,
+            cosine_features=args.cosine_features,
+            results_dir=args.results_dir,
+        )
+
+        for h5_path in h5_files:
+            logger.info(f"  Processing {h5_path.name} ...")
+            with h5py.File(h5_path) as f:
+                X = f['aligned_63d'][:].astype(np.float32)
+                x_vec = f['x_vec'][:].astype(np.float32)
+                y_vec = f['y_vec'][:].astype(np.float32)
+                z_vec = f['z_vec'][:].astype(np.float32)
+            pipeline.update(X, x_vec, y_vec, z_vec)
+
+        # Finalize: compute S + BigClusterer
+        pipeline.finalize(tau=args.tau)
+
+    elif args.h5:
+        # Single H5 mode: use existing pipeline.fit()
         X, x_vec, y_vec, z_vec, labels = load_h5_data(args.h5)
+
+        if args.skip_kmeans or X is None:
+            labels = load_from_results_dir(args.results_dir, getattr(X, 'shape', None))
+            if labels is None:
+                raise ValueError("--skip-kmeans requires labels.npy in results-dir")
+
+        if X is None or x_vec is None:
+            raise ValueError("H5 data required for pipeline (provide --h5)")
+
+        pipeline = BigClusterPipeline(
+            k=args.k,
+            tau=args.tau,
+            delta_t=args.delta_t,
+            min_transitions=args.min_transitions,
+            symmetrize=args.symmetrize,
+            cosine_features=args.cosine_features,
+            results_dir=args.results_dir,
+        )
+
+        logger.info(f"Starting pipeline: k={args.k}, tau={args.tau}, "
+                    f"cosine_features={args.cosine_features}, delta_t={args.delta_t}")
+
+        pipeline.fit(
+            X, x_vec, y_vec, z_vec,
+            labels=labels if not args.skip_kmeans else None,
+            k=args.k,
+            tau=args.tau,
+            cosine_features=args.cosine_features,
+            min_transitions=args.min_transitions,
+            delta_t=args.delta_t,
+            symmetrize=args.symmetrize,
+            results_dir=args.results_dir,
+        )
     else:
         # Use DataLoader
         from SLBHS.data.loader import DataLoader
         loader = DataLoader(data_dir=args.data_dir)
         X, meta = loader.load()
-        # NOTE: DataLoader doesn't provide x_vec/y_vec/z_vec
-        # This mode only works with pre-computed labels
         logger.info("DataLoader mode: results_dir must contain labels.npy")
         x_vec = y_vec = z_vec = None
 
-    # Load pre-computed labels if requested or if X not available
-    if args.skip_kmeans or X is None:
         labels = load_from_results_dir(args.results_dir, getattr(X, 'shape', None))
         if labels is None:
-            raise ValueError("--skip-kmeans requires labels.npy in results-dir")
+            raise ValueError("labels.npy not found in results-dir")
 
-    if X is None or x_vec is None:
-        raise ValueError("H5 data required for pipeline (provide --h5 or use DataLoader)")
+        pipeline = BigClusterPipeline(
+            k=args.k,
+            tau=args.tau,
+            delta_t=args.delta_t,
+            min_transitions=args.min_transitions,
+            symmetrize=args.symmetrize,
+            cosine_features=args.cosine_features,
+            results_dir=args.results_dir,
+        )
 
-    # Create pipeline
-    pipeline = BigClusterPipeline(
-        k=args.k,
-        tau=args.tau,
-        delta_t=args.delta_t,
-        min_transitions=args.min_transitions,
-        symmetrize=args.symmetrize,
-        cosine_features=args.cosine_features,
-        results_dir=args.results_dir,
-    )
-
-    # Run pipeline
-    logger.info(f"Starting pipeline: k={args.k}, tau={args.tau}, "
-                f"cosine_features={args.cosine_features}, delta_t={args.delta_t}")
-
-    pipeline.fit(
-        X, x_vec, y_vec, z_vec,
-        labels=labels if not args.skip_kmeans else None,
-        k=args.k,
-        tau=args.tau,
-        cosine_features=args.cosine_features,
-        min_transitions=args.min_transitions,
-        delta_t=args.delta_t,
-        symmetrize=args.symmetrize,
-        results_dir=args.results_dir,
-    )
+        pipeline.fit(
+            X, x_vec, y_vec, z_vec,
+            labels=labels,
+            k=args.k,
+            tau=args.tau,
+            cosine_features=args.cosine_features,
+            min_transitions=args.min_transitions,
+            delta_t=args.delta_t,
+            symmetrize=args.symmetrize,
+            results_dir=args.results_dir,
+        )
 
     # Save results
     os.makedirs(args.results_dir, exist_ok=True)

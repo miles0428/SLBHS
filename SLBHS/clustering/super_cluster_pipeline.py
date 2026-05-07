@@ -158,6 +158,45 @@ class TransitionCounter:
         self.min_transitions = min_transitions
         self.C: Optional[np.ndarray] = None  # (1024, 1024) 機率矩陣
 
+    def update(self, labels_batch: np.ndarray, hand_labels_batch: np.ndarray) -> 'TransitionCounter':
+        """
+        吃一個 batch（新H5）的 labels，累加進 self.C
+        不改變 self.C 以外的狀態
+
+        Parameters
+        ----------
+        labels_batch : (N,) Token_ID int，0-1023
+        hand_labels_batch : (N,) 'L'/'R' 字串陣列
+
+        Returns
+        -------
+        self
+        """
+        delta_t = self.delta_t
+        C_batch = np.zeros((self.k, self.k), dtype=np.float64)
+
+        # 分離左右手軌道（保持時間順序）
+        left_mask = hand_labels_batch == 'L'
+        right_mask = hand_labels_batch == 'R'
+        left_track = labels_batch[left_mask]
+        right_track = labels_batch[right_mask]
+
+        # 收集所有 k 值的所有 pair，用 np.add.at 一次計入
+        for track in (left_track, right_track):
+            from_tokens_list = [track[:-k] for k in range(1, delta_t + 1)]
+            to_tokens_list = [track[k:] for k in range(1, delta_t + 1)]
+            from_all = np.concatenate(from_tokens_list)
+            to_all = np.concatenate(to_tokens_list)
+            np.add.at(C_batch, (from_all, to_all), 1)
+
+        if self.C is None:
+            self.C = C_batch
+        else:
+            self.C += C_batch
+
+        logger.info(f"[TransitionCounter.update] batch added, C.nnz={int(np.sum(self.C > 0))}")
+        return self
+
     def fit(self, labels: np.ndarray, hand_labels: np.ndarray,
             delta_t: Optional[int] = None,
             min_transitions: Optional[int] = None) -> 'TransitionCounter':
@@ -535,6 +574,96 @@ class BigClusterPipeline:
 
         self._fitted = True
         logger.info("[SuperClusterPipeline] 完整 pipeline 完成")
+        return self
+
+    def update(self, X: np.ndarray, x_vec: np.ndarray,
+               y_vec: np.ndarray, z_vec: np.ndarray) -> 'BigClusterPipeline':
+        """
+        吃一個 H5 的資料，累加進 TransitionCounter
+        不 compute S、不做 BigClusterer
+
+        Parameters
+        ----------
+        X : (N, 63) aligned_63d
+        x_vec : (N, 3) x 軸向量
+        y_vec : (N, 3) y 軸向量
+        z_vec : (N, 3) z 軸向量
+
+        Returns
+        -------
+        self
+        """
+        from sklearn.cluster import MiniBatchKMeans
+        from sklearn.preprocessing import StandardScaler
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from SLBHS.clustering.kmeans import KMeansClusterer
+        from SLBHS.clustering.feature_transform import compute_cosine_features
+
+        cosine_features = self.cosine_features
+        results_dir = self.results_dir
+
+        # Step 1：HandLabeler
+        hand_labels = self.hand_labeler.fit_predict(x_vec, y_vec, z_vec)
+        logger.info(f"[Pipeline.update] HandLabeler: L={int(np.sum(hand_labels=='L'))} "
+                    f"R={int(np.sum(hand_labels=='R'))}")
+
+        # Step 2：KMeans predict
+        if cosine_features:
+            rd = results_dir
+            if rd is None:
+                raise ValueError('cosine_features=True requires results_dir')
+            kc = KMeansClusterer(results_dir=rd)
+            kc.load_model(rd)
+            labels = kc.predict(X)
+            k = kc.k
+        else:
+            k = self.k
+            scaler = StandardScaler()
+            X_scaled = scaler.fit_transform(X).astype(np.float64)
+            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42, n_init=3)
+            labels = kmeans.fit_predict(X_scaled)
+
+        self._k_used = k
+
+        # Step 3：累加進 TransitionCounter（不改變 self.C 以外的狀態）
+        self.transition_counter.update(labels, hand_labels)
+        logger.info(f"[Pipeline.update] TransitionCounter.C.nnz={int(np.sum(self.transition_counter.C > 0))}")
+
+        # 標記 S 尚未計算
+        self._S_computed = False
+        return self
+
+    def finalize(self, tau: Optional[float] = None) -> 'BigClusterPipeline':
+        """
+        所有 H5 跑完後呼叫
+        compute S + BigClusterer
+
+        Parameters
+        ----------
+        tau : float — similarity threshold（預設使用 self.tau）
+
+        Returns
+        -------
+        self
+        """
+        tau = tau if tau is not None else self.tau
+        symmetrize = self.symmetrize
+
+        C = self.transition_counter.get_matrix()
+        logger.info(f"[Pipeline.finalize] C.shape={C.shape}, C.nnz={int(np.sum(C > 0))}")
+
+        # SimilarityMatrix
+        S = self.similarity_matrix.compute(C, symmetrize=symmetrize)
+        logger.info(f"[Pipeline.finalize] S.shape={S.shape}")
+
+        # BigClusterer
+        self.big_clusterer.fit(S, tau=tau)
+        logger.info(f"[Pipeline.finalize] BigClusterer: N_clusters={self.big_clusterer.n_clusters}")
+
+        self._fitted = True
+        self._S_computed = True
+        logger.info("[BigClusterPipeline] finalize 完成")
         return self
 
     def save(self, results_dir: str) -> None:

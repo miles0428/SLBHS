@@ -13,7 +13,7 @@ import h5py
 import os
 import tempfile
 import json
-from functools import lru_cache
+from functools import cache
 
 # --------------------------------------------------------------------------
 # Fixtures (module-level helpers)
@@ -28,7 +28,7 @@ H5_PATH = (
 MODEL_DIR = "/home/ubuntu/.openclaw/workspace-coding/SLBHS/SLBHS/results"
 
 
-@lru_cache(maxsize=1)
+@cache
 def _load_h5_data():
     """Load real H5 data once for all tests in this module."""
     if not os.path.exists(H5_PATH):
@@ -43,7 +43,7 @@ def _load_h5_data():
     return data
 
 
-@lru_cache(maxsize=1)
+@cache
 def _compute_labels_64():
     """Pre-compute k=64 MiniBatchKMeans labels for all tests."""
     from sklearn.cluster import MiniBatchKMeans

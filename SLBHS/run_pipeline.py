@@ -44,6 +44,7 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s %(message)s"
 )
 logger = logging.getLogger(__name__)
+# Keep chunk size bounded to avoid loading entire large H5 datasets into RAM at once.
 H5_CHUNK_SIZE = 200_000
 
 

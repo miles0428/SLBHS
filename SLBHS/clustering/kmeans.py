@@ -437,7 +437,7 @@ class KMeansClusterer:
         if not has_model:
             raise RuntimeError('Must call load_model() or fit* before predict()')
 
-        # Cosine feature mode: scale raw (63D) + cosine features (15D) → concat → predict
+        # Cosine feature mode: scale raw (63D), weight cosine features (15D) by 3, then concat → predict
         if getattr(self, 'feature_type', None) == 'cosine':
             if X_new.ndim != 2 or X_new.shape[1] != 63:
                 raise ValueError(

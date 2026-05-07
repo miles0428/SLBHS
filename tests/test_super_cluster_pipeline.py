@@ -13,7 +13,7 @@ import h5py
 import os
 import tempfile
 import json
-from pathlib import Path
+from functools import lru_cache
 
 # --------------------------------------------------------------------------
 # Fixtures (module-level helpers)
@@ -28,10 +28,11 @@ H5_PATH = (
 MODEL_DIR = "/home/ubuntu/.openclaw/workspace-coding/SLBHS/SLBHS/results"
 
 
+@lru_cache(maxsize=1)
 def _load_h5_data():
     """Load real H5 data once for all tests in this module."""
     if not os.path.exists(H5_PATH):
-        unittest.skip(f"H5 file not found: {H5_PATH}")
+        raise unittest.SkipTest(f"H5 file not found: {H5_PATH}")
     with h5py.File(H5_PATH, "r") as f:
         data = {
             "X":       f["aligned_63d"][:],
@@ -42,10 +43,12 @@ def _load_h5_data():
     return data
 
 
-def _compute_labels_64(h5_data):
+@lru_cache(maxsize=1)
+def _compute_labels_64():
     """Pre-compute k=64 MiniBatchKMeans labels for all tests."""
     from sklearn.cluster import MiniBatchKMeans
     from sklearn.preprocessing import StandardScaler
+    h5_data = _load_h5_data()
     scaler = StandardScaler()
     X_s = scaler.fit_transform(h5_data["X"].astype(np.float64))
     km = MiniBatchKMeans(n_clusters=64, random_state=42, n_init=3)
@@ -110,7 +113,7 @@ class TestHandLabeler(unittest.TestCase):
 class TestTransitionCounter(unittest.TestCase):
     def setUp(self):
         self.h5_data = _load_h5_data()
-        self.labels_64 = _compute_labels_64(self.h5_data)
+        self.labels_64 = _compute_labels_64()
 
     def test_transitioncounter_shape(self):
         from SLBHS.clustering.super_cluster_pipeline import HandLabeler, TransitionCounter
@@ -183,7 +186,7 @@ class TestTransitionCounter(unittest.TestCase):
 class TestSimilarityMatrix(unittest.TestCase):
     def setUp(self):
         self.h5_data = _load_h5_data()
-        self.labels_64 = _compute_labels_64(self.h5_data)
+        self.labels_64 = _compute_labels_64()
 
     def _build_sm(self):
         from SLBHS.clustering.super_cluster_pipeline import (
@@ -238,7 +241,7 @@ class TestSimilarityMatrix(unittest.TestCase):
 class TestBigClusterer(unittest.TestCase):
     def setUp(self):
         self.h5_data = _load_h5_data()
-        self.labels_64 = _compute_labels_64(self.h5_data)
+        self.labels_64 = _compute_labels_64()
 
     def _build_bc(self, tau=0.5):
         from SLBHS.clustering.super_cluster_pipeline import (
@@ -280,6 +283,8 @@ class TestBigClusterer(unittest.TestCase):
 class TestBigClusterPipeline(unittest.TestCase):
     def setUp(self):
         self.h5_data = _load_h5_data()
+        if not os.path.exists(MODEL_DIR):
+            raise unittest.SkipTest(f"model_dir not found: {MODEL_DIR}")
 
     def test_bigclusterpipeline_fitted_true(self):
         from SLBHS.clustering.super_cluster_pipeline import BigClusterPipeline
@@ -325,9 +330,10 @@ class TestBigClusterPipeline(unittest.TestCase):
                 self.assertTrue(os.path.exists(path), f"Missing: {fname}")
             with open(os.path.join(tmpdir, "super_cluster_map.json")) as f:
                 sc_map = json.load(f)
-            self.assertEqual(len(sc_map), 512, "super_cluster_map should have 512 entries")
+            expected_k = pipeline._k_used
+            self.assertEqual(len(sc_map), expected_k, f"super_cluster_map should have {expected_k} entries")
             S = np.load(os.path.join(tmpdir, "similarity_matrix.npy"))
-            self.assertEqual(S.shape, (512, 512))
+            self.assertEqual(S.shape, (expected_k, expected_k))
             self.assertEqual(np.sum(np.isnan(S)), 0)
 
     def test_bigclusterpipeline_tau_0_9_clusters(self):
@@ -340,7 +346,7 @@ class TestBigClusterPipeline(unittest.TestCase):
             self.h5_data["z_vec"],
         )
         self.assertTrue(pipeline.big_clusterer.n_clusters >= 1)
-        self.assertEqual(len(pipeline.big_clusterer.cluster_map), 512)
+        self.assertEqual(len(pipeline.big_clusterer.cluster_map), pipeline._k_used)
 
 
 # --------------------------------------------------------------------------
@@ -350,7 +356,7 @@ class TestBigClusterPipeline(unittest.TestCase):
 class TestTransitionCounterUpdate(unittest.TestCase):
     def setUp(self):
         self.h5_data = _load_h5_data()
-        self.labels_64 = _compute_labels_64(self.h5_data)
+        self.labels_64 = _compute_labels_64()
 
     def test_transitioncounter_update_accumulates(self):
         """update() should accumulate C across multiple calls."""
@@ -410,6 +416,8 @@ class TestTransitionCounterUpdate(unittest.TestCase):
 class TestPipelineUpdateFinalize(unittest.TestCase):
     def setUp(self):
         self.h5_data = _load_h5_data()
+        if not os.path.exists(MODEL_DIR):
+            raise unittest.SkipTest(f"model_dir not found: {MODEL_DIR}")
 
     def test_pipeline_update_then_finalize_matches_fit(self):
         """update()+finalize() should give identical C and S as fit()."""

@@ -10,7 +10,6 @@ run_pipeline.py — Super Cluster Pipeline CLI 入口（v3）
     python run_pipeline.py \
         --folder /path/to/h5/folder \
         --model-dir /path/to/kmeans/model/ \
-        --k 1024 \
         --delta-t 10 \
         --tau 0.9 \
         --output results/
@@ -19,7 +18,6 @@ run_pipeline.py — Super Cluster Pipeline CLI 入口（v3）
     python run_pipeline.py \
         --h5 /path/to/single.h5 \
         --model-dir /path/to/kmeans/model/ \
-        --k 1024 \
         --delta-t 10 \
         --tau 0.9 \
         --output results/
@@ -55,10 +53,10 @@ def parse_args():
         epilog="""
 範例：
   # 批次模式（多個 H5）
-  python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ --k 1024 --delta-t 10 --tau 0.9 --output results/
+  python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ --delta-t 10 --tau 0.9 --output results/
 
   # 單一 H5 模式
-  python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --k 1024 --delta-t 10 --tau 0.9 --output results/
+  python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --delta-t 10 --tau 0.9 --output results/
 
   # 詳細輸出
   python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
@@ -166,11 +164,15 @@ def main():
         for h5_path in h5_files:
             logger.info(f"  Processing {h5_path.name} ...")
             with h5py.File(h5_path) as f:
-                X = f['aligned_63d'][:].astype(np.float32)
-                x_vec = f['x_vec'][:].astype(np.float32)
-                y_vec = f['y_vec'][:].astype(np.float32)
-                z_vec = f['z_vec'][:].astype(np.float32)
-            pipeline.update(X, x_vec, y_vec, z_vec)
+                total = f["aligned_63d"].shape[0]
+                chunk_size = 200_000
+                for start in range(0, total, chunk_size):
+                    end = min(start + chunk_size, total)
+                    X = f['aligned_63d'][start:end].astype(np.float32)
+                    x_vec = f['x_vec'][start:end].astype(np.float32)
+                    y_vec = f['y_vec'][start:end].astype(np.float32)
+                    z_vec = f['z_vec'][start:end].astype(np.float32)
+                    pipeline.update(X, x_vec, y_vec, z_vec)
 
         # Finalize: compute S + BigClusterer
         pipeline.finalize(tau=args.tau)

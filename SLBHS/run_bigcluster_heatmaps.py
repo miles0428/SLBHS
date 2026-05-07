@@ -33,11 +33,10 @@ with h5py.File(H5, "r") as f:
 logger.info(f"X={X.shape}, x_vec={xv.shape}")
 
 # ── params ───────────────────────────────────────────────────────────
-k             = 512
 delta_ts      = [1, 3, 5]
 tau           = 0.9
-cosine_feats  = True
 symmetrize    = True
+MODEL_DIR     = RESULTS_DIR
 
 # ── run pipeline for each delta_t ────────────────────────────────────
 C_matrices = {}  # delta_t → C matrix
@@ -46,8 +45,9 @@ results_summary = {}
 for dt in delta_ts:
     logger.info(f"\n{'='*60}\nRunning BigClusterPipeline delta_t={dt}\n{'='*60}")
     pipeline = BigClusterPipeline(
-        k=k, tau=tau, delta_t=dt,
+        tau=tau, delta_t=dt,
         symmetrize=symmetrize,
+        model_dir=MODEL_DIR,
         results_dir=RESULTS_DIR
     )
     pipeline.fit(
@@ -66,7 +66,7 @@ for dt in delta_ts:
         "N_clusters": n_clusters,
         "S_nan": int(np.sum(np.isnan(S))),
         "k": pipeline._k_used if hasattr(pipeline, '_k_used') else None,
-        "cosine_features": getattr(pipeline, 'cosine_features', None),
+        "feature_type": getattr(pipeline._kmeans_clusterer, 'feature_type', None),
         "symmetrize": symmetrize,
         "tau": tau,
         "delta_t": dt

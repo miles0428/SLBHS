@@ -416,7 +416,6 @@ Parse command-line arguments for the pipeline.
 python run_pipeline.py \\
     --folder /path/to/h5/folder \\
     --model-dir /path/to/kmeans/model/ \\
-    --k 1024 \\
     --delta-t 10 \\
     --tau 0.9 \\
     --output results/
@@ -425,7 +424,6 @@ python run_pipeline.py \\
 python run_pipeline.py \\
     --h5 /path/to/file.h5 \\
     --model-dir /path/to/kmeans/model/ \\
-    --k 1024 \\
     --delta-t 10 \\
     --tau 0.9 \\
     --output results/
@@ -623,7 +621,7 @@ BigClusterPipeline(
 
 ### Methods
 
-#### `fit(X, x_vec, y_vec, z_vec, labels=None, k=None, tau=None, min_transitions=None, delta_t=None, symmetrize=None, model_dir=None, results_dir=None) -> self`
+#### `fit(X, x_vec, y_vec, z_vec, labels=None, tau=None, min_transitions=None, delta_t=None, symmetrize=None, model_dir=None, results_dir=None) -> self`
 
 Run full pipeline.
 
@@ -635,8 +633,7 @@ Run full pipeline.
 | `x_vec` | (N, 3) float32 | x-axis vector |
 | `y_vec` | (N, 3) float32 | y-axis vector |
 | `z_vec` | (N, 3) float32 | z-axis vector |
-| `labels` | (N,) int or None | None | Token_ID per frame (INPUT); if None, generated internally from X |
-| `k` | int or None | Override constructor's k |
+| `labels` | (N,) int or None | None | Token_ID per frame (input); if None, generated internally from X with loaded model |
 | `tau` | float or None | Override constructor's tau |
 
 | `min_transitions` | int or None | Override constructor's min_transitions |

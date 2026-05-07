@@ -8,7 +8,7 @@ Super Cluster Pipeline — Phase 2
 
  Classes
 --------
-HandLabeler       : 從 wrist_px x 座標推斷 L/R（根據 vec_x × vec_y dot vec_z）
+HandLabeler       : 從 vec_x × vec_y dot vec_z 的符號推斷 L/R
 TransitionCounter : 建立 Token 轉移矩陣 C[1024×1024]（分左右手加總）
 SimilarityMatrix  : 從 C 計算相似度矩陣 S（列歸一化 + Cosine Similarity）
 BigClusterer      : 根據 S_ij > tau 建邊，用 Connected Components 分群
@@ -36,8 +36,8 @@ BigClusterPipeline: 串接全部，一鍵產出 Phase 2 結果
 ...     y_vec = f['y_vec'][:]
 ...     z_vec = f['z_vec'][:]
 
->>> pipeline = BigClusterPipeline(k=512, tau=0.9, cosine_features=True, results_dir='results')
->>> pipeline.fit(X, x_vec, y_vec, z_vec, cosine_features=True, results_dir='results')
+>>> pipeline = BigClusterPipeline(tau=0.9, model_dir='/path/to/model_dir', results_dir='results')
+>>> pipeline.fit(X, x_vec, y_vec, z_vec, results_dir='results')
 >>> pipeline.save('results')
 
 >>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
@@ -49,13 +49,14 @@ import json
 import logging
 from pathlib import Path
 from typing import Optional, Union
+from SLBHS.clustering.kmeans import KMeansClusterer
 
 logger = logging.getLogger(__name__)
 
 
 class HandLabeler:
     """
-    從 wrist_px x 座標推斷 L/R
+    從 vec_x × vec_y dot vec_z 推斷 L/R
     
     策略：使用 vec_x × vec_y dot vec_z 判斷左右手
     - 計算：dot_product = np.sum(np.cross(x_vec, y_vec) * z_vec, axis=1)
@@ -68,9 +69,6 @@ class HandLabeler:
 
     def __init__(self):
         self._fitted = False
-        self._x_vec: Optional[np.ndarray] = None
-        self._y_vec: Optional[np.ndarray] = None
-        self._z_vec: Optional[np.ndarray] = None
 
     def fit_predict(self, x_vec: np.ndarray, y_vec: np.ndarray, 
                     z_vec: np.ndarray) -> np.ndarray:
@@ -92,9 +90,6 @@ class HandLabeler:
         cross_xy = np.cross(x_vec, y_vec)  # (N, 3)
         dot_product = np.sum(cross_xy * z_vec, axis=1)  # (N,)
         
-        self._x_vec = x_vec.copy()
-        self._y_vec = y_vec.copy()
-        self._z_vec = z_vec.copy()
         self._fitted = True
 
         labels = np.empty(x_vec.shape[0], dtype='<U1')
@@ -156,7 +151,7 @@ class TransitionCounter:
         self.k = k
         self.delta_t = delta_t
         self.min_transitions = min_transitions
-        self.C: Optional[np.ndarray] = None  # (1024, 1024) 機率矩陣
+        self.C: Optional[np.ndarray] = None  # (k, k) 轉移計數矩陣
 
     def update(self, labels_batch: np.ndarray, hand_labels_batch: np.ndarray) -> 'TransitionCounter':
         """
@@ -173,7 +168,8 @@ class TransitionCounter:
         self
         """
         delta_t = self.delta_t
-        C_batch = np.zeros((self.k, self.k), dtype=np.float64)
+        if self.C is None:
+            self.C = np.zeros((self.k, self.k), dtype=np.float64)
 
         # 分離左右手軌道（保持時間順序）
         left_mask = hand_labels_batch == 'L'
@@ -183,16 +179,13 @@ class TransitionCounter:
 
         # 收集所有 k 值的所有 pair，用 np.add.at 一次計入
         for track in (left_track, right_track):
+            if track.shape[0] <= delta_t:
+                continue
             from_tokens_list = [track[:-k] for k in range(1, delta_t + 1)]
             to_tokens_list = [track[k:] for k in range(1, delta_t + 1)]
             from_all = np.concatenate(from_tokens_list)
             to_all = np.concatenate(to_tokens_list)
-            np.add.at(C_batch, (from_all, to_all), 1)
-
-        if self.C is None:
-            self.C = C_batch
-        else:
-            self.C += C_batch
+            np.add.at(self.C, (from_all, to_all), 1)
 
         logger.info(f"[TransitionCounter.update] batch added, C.nnz={int(np.sum(self.C > 0))}")
         return self
@@ -236,6 +229,8 @@ class TransitionCounter:
 
         # 收集所有 k 值的所有 pair，用 np.add.at 一次計入
         for track in (left_track, right_track):
+            if track.shape[0] <= delta_t:
+                continue
             from_tokens_list = [track[:-k] for k in range(1, delta_t + 1)]
             to_tokens_list   = [track[k:]   for k in range(1, delta_t + 1)]
             from_all = np.concatenate(from_tokens_list)
@@ -421,7 +416,7 @@ class BigClusterPipeline:
 
     Example
     -------
-    >>> pipeline = BigClusterPipeline(k=1024, tau=0.9, model_dir='/path/to/kmeans/model/')
+    >>> pipeline = BigClusterPipeline(tau=0.9, model_dir='/path/to/kmeans/model/')
     >>> pipeline.fit(X, x_vec, y_vec, z_vec)
     >>> pipeline.save('results')
     >>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
@@ -482,9 +477,7 @@ class BigClusterPipeline:
 
         流程：
         1. HandLabeler.fit_predict(x_vec, y_vec, z_vec) → hand_labels
-        2. 若 labels 未提供：依 model_dir 或 MiniBatchKMeans 產生
-           - model_dir：KMeansClusterer.load_model() + predict()（只吃預訓練）
-           - 無 model_dir：MiniBatchKMeans on raw 63D（需自行提供 k）
+        2. 若 labels 未提供：依 model_dir 載入預訓練 KMeansClusterer 後 predict
         3. TransitionCounter.fit(labels, hand_labels) → C
         4. SimilarityMatrix.compute(C) → S
         5. BigClusterer.fit(S, tau) → super_cluster_map
@@ -500,12 +493,6 @@ class BigClusterPipeline:
         model_dir : str — KMeans 模型目錄（k 從 meta.json 讀取）
         results_dir : str — pipeline 產出路徑
         """
-        from sklearn.cluster import MiniBatchKMeans
-        from sklearn.preprocessing import StandardScaler
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-        from SLBHS.clustering.kmeans import KMeansClusterer
-
         # 解析參數（優先使用傳入值，否則用實例變數）
         tau = tau if tau is not None else self.tau
         min_transitions = min_transitions if min_transitions is not None else self.min_transitions
@@ -547,6 +534,15 @@ class BigClusterPipeline:
                     "without an explicit k. Please provide --model-dir pointing to a "
                     "pre-trained KMeans model directory."
                 )
+        else:
+            k = self.transition_counter.k
+            if labels.size > 0:
+                inferred_k = int(labels.max()) + 1
+                if inferred_k > k:
+                    k = inferred_k
+                    self.transition_counter = TransitionCounter(
+                        k=k, delta_t=delta_t, min_transitions=min_transitions
+                    )
 
         self.labels = labels
         self._k_used = k
@@ -589,12 +585,6 @@ class BigClusterPipeline:
         -------
         self
         """
-        from sklearn.cluster import MiniBatchKMeans
-        from sklearn.preprocessing import StandardScaler
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-        from SLBHS.clustering.kmeans import KMeansClusterer
-
         model_dir = self.model_dir
 
         if model_dir is None:
@@ -627,12 +617,6 @@ class BigClusterPipeline:
                 self._kmeans_loaded = True
             labels = self._kmeans_clusterer.predict(X)
             k = self._kmeans_clusterer.k
-        else:
-            k = self.k
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X).astype(np.float64)
-            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42, n_init=3)
-            labels = kmeans.fit_predict(X_scaled)
 
         self._k_used = k
 
@@ -661,6 +645,9 @@ class BigClusterPipeline:
         symmetrize = self.symmetrize
 
         C = self.transition_counter.get_matrix()
+        if self.min_transitions > 0:
+            C = C.copy()
+            C[C < self.min_transitions] = 0
         logger.info(f"[Pipeline.finalize] C.shape={C.shape}, C.nnz={int(np.sum(C > 0))}")
 
         # SimilarityMatrix
@@ -722,7 +709,10 @@ class BigClusterPipeline:
             "phase": 2,
             "k": getattr(self, '_k_used', self.transition_counter.k),
             "tau": getattr(self, '_tau_used', self.tau),
-            "cosine_features": getattr(self, 'cosine_features', None),
+            "feature_type": (
+                getattr(self._kmeans_clusterer, "feature_type", None)
+                if self._kmeans_clusterer is not None else None
+            ),
             "hand_labeler": {
                 "fitted": self.hand_labeler._fitted
             },
@@ -746,85 +736,6 @@ class BigClusterPipeline:
             json.dump(report, f, indent=2, ensure_ascii=False)
 
         logger.info(f"[SuperClusterPipeline] Phase 2 產出已存至 {results_dir}")
-
-
-# ─────────────────────────────────────────────
-# 測試程式：驗證 cosine_features 參數的兩種模式
-# ─────────────────────────────────────────────
-if __name__ == "__main__":
-    import h5py
-    import logging
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s"
-    )
-
-    h5_path = (
-        "/home/ubuntu/.openclaw/media/inbound/"
-        "2022_12_12_14_00_中央流行疫情指揮中心嚴重特殊傳染性肺炎記者會_crop"
-        "---87414a0f-15ac-4b38-8710-15c43fa52793.h5"
-    )
-    cosine_results_dir = "/home/ubuntu/.openclaw/workspace-coding/SLBHS/SLBHS/results"
-    standard_results_dir = "/home/ubuntu/.openclaw/workspace-coding/SLBHS/results_real"
-
-    print("=" * 60)
-    print("SLBHS Super Cluster Pipeline — cosine_features 測試")
-    print("=" * 60)
-
-    # 讀取 H5
-    with h5py.File(h5_path, "r") as f:
-        X = f["aligned_63d"][:]
-        x_vec = f["x_vec"][:]
-        y_vec = f["y_vec"][:]
-        z_vec = f["z_vec"][:]
-
-    print(f"X shape: {X.shape}")
-
-    # ── 模式 1：cosine_features=True ──
-    print("\n" + "=" * 60)
-    print("測試模式 1：cosine_features=True")
-    print("=" * 60)
-    pipeline_cos = BigClusterPipeline(k=512, tau=0.9)
-    pipeline_cos.fit(
-        X, x_vec, y_vec, z_vec,
-        cosine_features=True,
-        results_dir=cosine_results_dir
-    )
-    pipeline_cos.save(cosine_results_dir)
-    C_cos = pipeline_cos.transition_counter.get_matrix()
-    S_cos = pipeline_cos.similarity_matrix.S
-    print(f"  C.shape={C_cos.shape}, nnz={np.sum(C_cos>0)}, nan={np.isnan(C_cos).sum()}")
-    print(f"  S.shape={S_cos.shape}, nan={np.isnan(S_cos).sum()}")
-    print(f"  N_clusters={pipeline_cos.big_clusterer.n_clusters}")
-    print(f"  cosine_features in report: {getattr(pipeline_cos, 'cosine_features', None)}")
-
-    # ── 模式 2：cosine_features=False（MiniBatchKMeans on raw 63D）──
-    print("\n" + "=" * 60)
-    print("測試模式 2：cosine_features=False (MiniBatchKMeans on raw 63D)")
-    print("=" * 60)
-    pipeline_raw = BigClusterPipeline(k=64, tau=0.9)
-    pipeline_raw.fit(
-        X, x_vec, y_vec, z_vec,
-        cosine_features=False,
-        k=64
-    )
-    pipeline_raw.save(standard_results_dir)
-    C_raw = pipeline_raw.transition_counter.get_matrix()
-    S_raw = pipeline_raw.similarity_matrix.S
-    print(f"  C.shape={C_raw.shape}, nnz={np.sum(C_raw>0)}, nan={np.isnan(C_raw).sum()}")
-    print(f"  S.shape={S_raw.shape}, nan={np.isnan(S_raw).sum()}")
-    print(f"  N_clusters={pipeline_raw.big_clusterer.n_clusters}")
-    print(f"  cosine_features in report: {getattr(pipeline_raw, 'cosine_features', None)}")
-
-    # ── Validation ──
-    all_ok = (
-        not np.isnan(S_cos).any() and not np.isnan(C_cos).any()
-        and pipeline_cos.big_clusterer.n_clusters >= 1
-        and not np.isnan(S_raw).any() and not np.isnan(C_raw).any()
-        and pipeline_raw.big_clusterer.n_clusters >= 1
-    )
-    print(f"\n{'✅ 全部通過' if all_ok else '❌ 有問題'}")
 
 
 # ═══════════════════════════════════════════════════════════

@@ -27,12 +27,7 @@ python -m SLBHS.run_visualization --k 512 --cosine-features
 
 ### Run Big Cluster Pipeline
 ```bash
-python -m SLBHS.run_visualization --k 512 --n-super 20 --format both
-```
-
-Use cached results:
-```bash
-python -m SLBHS.run_visualization --skip-kmeans --skip-super
+python -m SLBHS.run_pipeline --h5 /path/to/file.h5 --model-dir /path/to/model_dir --delta-t 10 --tau 0.9 --output results
 ```
 
 ## Input Format (H5)
@@ -56,12 +51,14 @@ file_crop---xxxxxxxxxx.h5
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--k` | 512 | K-Means cluster count |
-| `--n-super` | 20 | Super Cluster count for visualization |
-| `--cosine-features` | — | Use 78D cosine features (63D + 15D bone-angle) |
-| `--skip-kmeans` | — | Use cached K-Means results |
-| `--skip-super` | — | Use cached Super Cluster results |
-| `--results-dir` | results | Output directory |
+| `--h5` | — | Single H5 path |
+| `--folder` | — | Folder of H5 files (batch mode) |
+| `--model-dir` | — | Pretrained KMeans model directory (required) |
+| `--delta-t` | 10 | Transition interval |
+| `--tau` | 0.9 | Similarity threshold |
+| `--min-transitions` | 0 | Minimum transition count filter |
+| `--symmetrize` | true | Symmetrize transition matrix |
+| `--output` | results | Output directory |
 
 ## Documentation
 

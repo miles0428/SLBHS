@@ -40,7 +40,7 @@ Computed separately for left and right hands, then summed.
 $$W = \frac{C + C^T}{2}$$
 $$M_{ij} = \frac{W_{ij}}{\sum_k W_{ik}}$$
 
-M is a probability matrix; each column sums to 1 (row-wise in implementation).
+M is a probability matrix; each row sums to 1.
 
 ### Step 5: Cosine Similarity
 
@@ -67,11 +67,7 @@ Input H5
   ▼
 [BigClusterPipeline]
   │
-  ├── If cosine_features=True:
-  │   └── [KMeansClusterer.predict] ──→ labels
-  │
-  ├── If cosine_features=False:
-  │   └── [MiniBatchKMeans] ──→ labels
+  └── [KMeansClusterer.predict] ──→ labels
   │
   ▼
 [TransitionCounter] ──→ C (1024, 1024)

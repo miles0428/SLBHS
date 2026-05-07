@@ -47,13 +47,11 @@ for dt in delta_ts:
     logger.info(f"\n{'='*60}\nRunning BigClusterPipeline delta_t={dt}\n{'='*60}")
     pipeline = BigClusterPipeline(
         k=k, tau=tau, delta_t=dt,
-        cosine_features=cosine_feats,
         symmetrize=symmetrize,
         results_dir=RESULTS_DIR
     )
     pipeline.fit(
         X, xv, yv, zv,
-        cosine_features=cosine_feats,
         symmetrize=symmetrize
     )
 
@@ -67,8 +65,8 @@ for dt in delta_ts:
         "C_max":  float(C.max()),
         "N_clusters": n_clusters,
         "S_nan": int(np.sum(np.isnan(S))),
-        "k": pipeline._k_used,
-        "cosine_features": pipeline.cosine_features,
+        "k": pipeline._k_used if hasattr(pipeline, '_k_used') else None,
+        "cosine_features": getattr(pipeline, 'cosine_features', None),
         "symmetrize": symmetrize,
         "tau": tau,
         "delta_t": dt

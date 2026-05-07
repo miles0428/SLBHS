@@ -136,7 +136,11 @@ def main():
 
     # Validate model_dir
     if args.model_dir is None:
-        logger.warning("--model-dir not specified; will use MiniBatchKMeans fallback (no pre-trained model)")
+        raise ValueError(
+            "--model-dir is required. MiniBatchKMeans fallback is not implemented "
+            "by BigClusterPipeline.fit()/update(), so the CLI cannot run without a "
+            "pre-trained model directory."
+        )
 
     # Common parameters
     common_kwargs = dict(

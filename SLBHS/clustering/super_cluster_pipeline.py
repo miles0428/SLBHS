@@ -532,7 +532,15 @@ class BigClusterPipeline:
                 kc = KMeansClusterer(results_dir=model_dir)
                 kc.load_model(model_dir)
                 labels = kc.predict(X)
-                k = kc.k
+                actual_k = kc.k
+                # 若 model 的 k 與 CLI --k 不同，以 model 為準，重新 init TransitionCounter
+                if actual_k != k:
+                    logger.info(f"[Pipeline.fit] Model k={actual_k} differs from CLI k={k}, "
+                                f"reinitializing TransitionCounter with actual_k={actual_k}")
+                    self.transition_counter = TransitionCounter(
+                        k=actual_k, delta_t=delta_t, min_transitions=min_transitions
+                    )
+                k = actual_k
                 self._kmeans_loaded = True
                 self._kmeans_clusterer = kc
                 logger.info(f"[Pipeline.fit] KMeansClusterer.predict done: "
@@ -607,6 +615,15 @@ class BigClusterPipeline:
                 logger.info(f"[Pipeline.update] KMeansClusterer.load_model from {model_dir}")
                 kc = KMeansClusterer(results_dir=model_dir)
                 kc.load_model(model_dir)
+                actual_k = kc.k
+                # 若 model 的 k 與目前 TransitionCounter 的 k 不同，重新 init
+                if actual_k != self.transition_counter.k:
+                    logger.info(f"[Pipeline.update] Model k={actual_k} differs from "
+                                f"TransitionCounter.k={self.transition_counter.k}, "
+                                f"reinitializing TransitionCounter with actual_k={actual_k}")
+                    self.transition_counter = TransitionCounter(
+                        k=actual_k, delta_t=self.delta_t, min_transitions=self.min_transitions
+                    )
                 self._kmeans_clusterer = kc
                 self._kmeans_loaded = True
             labels = self._kmeans_clusterer.predict(X)

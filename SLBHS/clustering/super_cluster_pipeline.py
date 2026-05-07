@@ -96,13 +96,13 @@ class HandLabeler:
 
 class TransitionCounter:
     """
-    建立轉移矩陣（框架，Phase 2 實作）
-    
-    遍歷 Left_Track / Right_Track，
-    僅選取同手、Δt ≤ delta_t 的相鄰 Token 對（T_n, T_{n+k}），
-    C[T_n, T_{n+k}] += 1
-    
-    可過濾：min_transitions — 低於此轉移次數的 Token 會被忽略
+    建立 Token 轉移矩陣
+
+    遍歷 Left_Track / Right_Track（已按時間排序），
+    對每個 Token_i，往前看 delta_t 步：i→i+1, i→i+2, ..., i→i+delta_t
+    每個符合的 pair 都 C[T_i, T_{i+k}] += 1（k=1~delta_t）
+
+    可過濾：min_transitions — 低於此轉移次數的 Token 對清除為 0
     """
 
     def __init__(self, k: int = 1024, delta_t: int = 1, min_transitions: int = 0):
@@ -117,15 +117,19 @@ class TransitionCounter:
         """
         建立左右手各自的 Token 轉移矩陣
 
-        遍歷 Track（已按時間排序），選取同手、相鄰（Δt ≤ 2）的 Token 對：
-        C[T_n, T_{n+1}] += 1
-
+        遍歷 Track（已按時間排序），對每個 Token_i，往前看 delta_t 步：
+        i→i+1, i→i+2, ..., i→i+delta_t
+        每個符合的 pair 都 C[T_i, T_{i+k}] += 1（k=1~delta_t）
         最後將左右手矩陣相加，得到 C[1024×1024]
+
+        可過濾：min_transitions — 低於此轉移次數的 Token 對清除為 0
 
         Parameters
         ----------
         labels : (N,) Token_ID int，0-1023
         hand_labels : (N,) 'L'/'R' 字串陣列
+        delta_t : int — 往前看多少步（預設 1，只算連續兩幀）
+        min_transitions : int — 最低轉移次數（低於此的 Token 對清除為 0）
 
         Returns
         -------
@@ -146,15 +150,20 @@ class TransitionCounter:
 
         def _count_transitions(track: np.ndarray, C: np.ndarray) -> np.ndarray:
             """
-            統計同一軌道上、相鄰（Δt = delta_t）的 Token 轉移
-            
-            過濾：低於 min_transitions 次的 Token 會被忽略
+            統計同一軌道上、往前 delta_t 步的所有 Token 轉移
+
+            對每個 Token_i，檢查 i→i+1, i→i+2, ..., i→i+delta_t
+            每個符合的 pair 都 C[Token_i, Token_{i+k}] += 1（k=1~delta_t）
+
+            過濾：低於 min_transitions 次的 Token 對清除為 0
             """
-            # 只取 Δt = delta_t（即跳過 delta_t-1 幀）
-            for i in range(len(track) - delta_t):
+            for i in range(len(track)):
                 t_from = int(track[i])
-                t_to = int(track[i + delta_t])
-                C[t_from, t_to] += 1
+                # 往後看 delta_t 步，每步都統計
+                for k in range(1, delta_t + 1):
+                    if i + k < len(track):
+                        t_to = int(track[i + k])
+                        C[t_from, t_to] += 1
             return C
 
         _count_transitions(left_track, C)

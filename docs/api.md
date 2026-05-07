@@ -1,31 +1,31 @@
-# API 參考文件
+# API Reference
 
-## 主要 Module：`SLBHS.clustering.super_cluster_pipeline`
+## Main Module: `SLBHS.clustering.super_cluster_pipeline`
 
 ---
 
 ## `HandLabeler`
 
-根據 `cross(vec_x, vec_y) dot vec_z` 判斷左手/右手。
+Determines left/right hand using `cross(vec_x, vec_y) dot vec_z`.
 
 ### Methods
 
 #### `fit_predict(x_vec, y_vec, z_vec) -> np.ndarray`
 
-擬合並預測手性標籤。
+Fit and predict hand labels.
 
 **Parameters**
 
-| 名稱 | 型別 | 說明 |
-|------|------|------|
-| `x_vec` | (N, 3) float32 | x 軸向量 |
-| `y_vec` | (N, 3) float32 | y 軸向量 |
-| `z_vec` | (N, 3) float32 | z 軸向量 |
+| Name | Type | Description |
+|------|------|-------------|
+| `x_vec` | (N, 3) float32 | x-axis vector |
+| `y_vec` | (N, 3) float32 | y-axis vector |
+| `z_vec` | (N, 3) float32 | z-axis vector |
 
 **Returns**
-- `(N,) '<U1'` — 'L' 或 'R'
+- `(N,) '<U1'` — 'L' or 'R'
 
-**Example**
+**Examples**
 
 ```python
 from SLBHS.clustering.super_cluster_pipeline import HandLabeler
@@ -39,7 +39,7 @@ print(f"L={np.sum(hand_labels=='L')}, R={np.sum(hand_labels=='R')}")
 
 ## `TransitionCounter`
 
-建立 Token 轉移矩陣 C[1024×1024]。
+Builds Token transition matrix C[1024×1024].
 
 ### Constructor
 
@@ -47,69 +47,69 @@ print(f"L={np.sum(hand_labels=='L')}, R={np.sum(hand_labels=='R')}")
 TransitionCounter(k=1024, delta_t=1, min_transitions=0)
 ```
 
-| 參數 | 型別 | 預設值 | 說明 |
-|------|------|--------|------|
-| `k` | int | 1024 | Token 總數 |
-| `delta_t` | int | 1 | 往前看多少步 |
-| `min_transitions` | int | 0 | 最低轉移次數 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `k` | int | 1024 | Total token count |
+| `delta_t` | int | 1 | Frames to look ahead |
+| `min_transitions` | int | 0 | Minimum transition count |
 
 ### Methods
 
 #### `fit(token_ids, hand_labels, delta_t=None, min_transitions=None) -> self`
 
-建立轉移矩陣。
+Build transition matrix.
 
 **Parameters**
 
-| 名稱 | 型別 | 說明 |
-|------|------|------|
-| `token_ids` | (N,) int | Token_ID，0-1023 |
-| `hand_labels` | (N,) '<U1' | 'L' 或 'R' |
-| `delta_t` | int or None | 覆蓋 constructor 的 delta_t |
-| `min_transitions` | int or None | 覆蓋 constructor 的 min_transitions |
+| Name | Type | Description |
+|------|------|-------------|
+| `token_ids` | (N,) int | Token_ID, 0-1023 |
+| `hand_labels` | (N,) '<U1' | 'L' or 'R' |
+| `delta_t` | int or None | Override constructor's delta_t |
+| `min_transitions` | int or None | Override constructor's min_transitions |
 
 **Returns**
 - `self`
 
 #### `get_matrix() -> np.ndarray`
 
-取得轉移矩陣。
+Get transition matrix.
 
 **Returns**
-- `(k, k)` float64 — 轉移計數矩陣（未歸一化）
+- `(k, k)` float64 — raw transition count matrix (unnormalized)
 
 ---
 
 ## `SimilarityMatrix`
 
-從轉移矩陣計算相似度矩陣 S。
+Computes similarity matrix S from transition matrix.
 
 ### Methods
 
 #### `compute(M, symmetrize=True) -> np.ndarray`
 
-計算相似度矩陣。
+Compute similarity matrix.
 
 **Parameters**
 
-| 名稱 | 型別 | 說明 |
-|------|------|------|
-| `M` | (k, k) float64 | 原始轉移計數矩陣 C |
-| `symmetrize` | bool | 是否對稱化（預設 True） |
+| Name | Type | Description |
+|------|------|-------------|
+| `M` | (k, k) float64 | Raw transition count matrix C |
+| `symmetrize` | bool | Symmetrize matrix (default True) |
 
 **Returns**
-- `(k, k)` float64 — cosine similarity 矩陣 S
+- `(k, k)` float64 — cosine similarity matrix S
 
-**流程**
-1. 對稱化：`W = (M + M.T) / 2`
-2. 列歸一化：`M_ij = W_ij / Σ_k(W_ik)`
-3. Cosine Similarity：`S_ij = cos(M_i, M_j)`
+**Process**
+1. Symmetrize: `W = (M + M.T) / 2`
+2. Row normalize: `M_ij = W_ij / Σ_k(W_ik)`
+3. Cosine similarity: `S_ij = cos(M_i, M_j)`
 
 ---
 
 ## `BigClusterer`
 
-根據相似度閾值提取 Super Clusters。
+Extracts Super Clusters based on similarity threshold.
 
 ### Constructor
 
@@ -117,29 +117,29 @@ TransitionCounter(k=1024, delta_t=1, min_transitions=0)
 BigClusterer(tau=0.9)
 ```
 
-| 參數 | 型別 | 預設值 | 說明 |
-|------|------|--------|------|
-| `tau` | float | 0.9 | 相似度閾值（0.0-1.0）|
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `tau` | float | 0.9 | Similarity threshold (0.0-1.0) |
 
 ### Methods
 
 #### `fit(S, tau=None) -> self`
 
-從相似度矩陣 S 提取 Super Clusters。
+Extract Super Clusters from similarity matrix S.
 
 **Parameters**
 
-| 名稱 | 型別 | 說明 |
-|------|------|------|
-| `S` | (k, k) float64 | cosine similarity 矩陣 |
-| `tau` | float or None | 覆蓋 constructor 的 tau |
+| Name | Type | Description |
+|------|------|-------------|
+| `S` | (k, k) float64 | Cosine similarity matrix |
+| `tau` | float or None | Override constructor's tau |
 
 **Returns**
 - `self`
 
 #### `get_clusters() -> dict`
 
-取得 Super Cluster mapping。
+Get Super Cluster mapping.
 
 **Returns**
 - `dict` — `{token_id: super_cluster_id}`
@@ -148,7 +148,7 @@ BigClusterer(tau=0.9)
 
 ## `BigClusterPipeline`
 
-串接全部流程，一鍵產出 Phase 2 結果。
+Chains all steps, one-shot Phase 2 output.
 
 ### Constructor
 
@@ -164,55 +164,55 @@ BigClusterPipeline(
 )
 ```
 
-| 參數 | 型別 | 預設值 | 說明 |
-|------|------|--------|------|
-| `k` | int | 512 | K-Means 群數 |
-| `tau` | float | 0.9 | 相似度閾值 |
-| `delta_t` | int | 1 | 轉移間隔 |
-| `cosine_features` | bool | True | 是否使用 cosine feature（78D）|
-| `min_transitions` | int | 0 | 最低轉移次數 |
-| `symmetrize` | bool | True | 是否對稱化 |
-| `results_dir` | str or None | None | KMeansClusterer 模型路徑 |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `k` | int | 512 | K-Means cluster count |
+| `tau` | float | 0.9 | Similarity threshold |
+| `delta_t` | int | 1 | Transition interval |
+| `cosine_features` | bool | True | Use cosine feature (78D) |
+| `min_transitions` | int | 0 | Minimum transition count |
+| `symmetrize` | bool | True | Symmetrize matrix |
+| `results_dir` | str or None | None | KMeansClusterer model path |
 
 ### Methods
 
 #### `fit(X, x_vec, y_vec, z_vec, labels=None, k=None, tau=None, cosine_features=None, min_transitions=None, delta_t=None, symmetrize=None, results_dir=None) -> self`
 
-執行完整 pipeline。
+Run full pipeline.
 
 **Parameters**
 
-| 名稱 | 型別 | 說明 |
-|------|------|------|
-| `X` | (N, 63) float32 | aligned_63d 手勢資料 |
-| `x_vec` | (N, 3) float32 | x 軸向量 |
-| `y_vec` | (N, 3) float32 | y 軸向量 |
-| `z_vec` | (N, 3) float32 | z 軸向量 |
-| `labels` | (N,) int or None | Token_ID；若 None 則依 cosine_features 模式產生 |
-| `k` | int or None | 覆蓋 constructor 的 k |
-| `tau` | float or None | 覆蓋 constructor 的 tau |
-| `cosine_features` | bool or None | 覆蓋 constructor 的 cosine_features |
-| `min_transitions` | int or None | 覆蓋 constructor 的 min_transitions |
-| `delta_t` | int or None | 覆蓋 constructor 的 delta_t |
-| `symmetrize` | bool or None | 覆蓋 constructor 的 symmetrize |
-| `results_dir` | str or None | 覆蓋 constructor 的 results_dir |
+| Name | Type | Description |
+|------|------|-------------|
+| `X` | (N, 63) float32 | aligned_63d hand pose data |
+| `x_vec` | (N, 3) float32 | x-axis vector |
+| `y_vec` | (N, 3) float32 | y-axis vector |
+| `z_vec` | (N, 3) float32 | z-axis vector |
+| `labels` | (N,) int or None | Token_ID; if None, generated based on cosine_features mode |
+| `k` | int or None | Override constructor's k |
+| `tau` | float or None | Override constructor's tau |
+| `cosine_features` | bool or None | Override constructor's cosine_features |
+| `min_transitions` | int or None | Override constructor's min_transitions |
+| `delta_t` | int or None | Override constructor's delta_t |
+| `symmetrize` | bool or None | Override constructor's symmetrize |
+| `results_dir` | str or None | Override constructor's results_dir |
 
 **Returns**
 - `self`
 
 #### `save(results_dir) -> None`
 
-儲存產出到 results_dir。
+Save outputs to results_dir.
 
-**產出檔案**
+**Output Files**
 
-| 檔案 | 格式 | 說明 |
-|------|------|------|
-| `similarity_matrix.npy` | (k, k) float64 | Cosine similarity 矩陣 S |
-| `transition_matrix.npy` | (k, k) float64 | 原始轉移計數矩陣 C |
-| `symmetrized_matrix.npy` | (k, k) float64 | 對稱化後的矩陣 W |
+| File | Format | Description |
+|------|--------|-------------|
+| `similarity_matrix.npy` | (k, k) float64 | Cosine similarity matrix S |
+| `transition_matrix.npy` | (k, k) float64 | Raw transition count matrix C |
+| `symmetrized_matrix.npy` | (k, k) float64 | Symmetrized matrix W |
 | `super_cluster_map.json` | JSON | `{token_id: super_cluster_id}` |
-| `pipeline_phase2.json` | JSON | Phase 2 完整摘要 |
+| `pipeline_phase2.json` | JSON | Phase 2 full summary |
 
 ---
 
@@ -220,7 +220,7 @@ BigClusterPipeline(
 
 ### `KMeansClusterer`
 
-K-Means 分群器，支援 inference。
+K-Means clusterer with inference support.
 
 #### Constructor
 
@@ -232,17 +232,17 @@ KMeansClusterer(X=None, results_dir=None, k=None, seed=42)
 
 ##### `load_model(results_dir=None, prefix='kmeans') -> None`
 
-載入預訓練模型（joblib 格式）。
+Load pre-trained model (joblib format).
 
 ##### `predict(X_new) -> np.ndarray`
 
-對新資料分類。
+Classify new data.
 
 **Parameters**
-- `X_new`: `(M, 63)` float32 — 新手勢資料
+- `X_new`: `(M, 63)` float32 — new hand pose data
 
 **Returns**
-- `(M,)` int — cluster labels（0 到 k-1）
+- `(M,)` int — cluster labels (0 to k-1)
 
 **Example**
 
@@ -260,7 +260,7 @@ labels = kc.predict(new_data)
 
 ### `DataLoader`
 
-H5 檔案讀取與快取。
+H5 file reading and caching.
 
 #### Constructor
 
@@ -268,20 +268,20 @@ H5 檔案讀取與快取。
 DataLoader(data_dir=None, cache_dir=None)
 ```
 
-| 參數 | 型別 | 說明 |
-|------|------|------|
-| `data_dir` | str | H5 檔案路徑、目錄或 glob pattern |
-| `cache_dir` | str | 快取目錄 |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `data_dir` | str | H5 file path, directory or glob pattern |
+| `cache_dir` | str | Cache directory |
 
 #### Methods
 
 ##### `load(force_reload=False) -> Tuple[np.ndarray, dict]`
 
-載入 aligned_63d 資料。
+Load aligned_63d data.
 
 **Returns**
 - `X`: `(N, 63)` float32
-- `meta`: dict（含 `n_frames`, `files`, `n_files`, `per_file_frames`）
+- `meta`: dict (contains `n_frames`, `files`, `n_files`, `per_file_frames`)
 
 **Example**
 

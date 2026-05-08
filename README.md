@@ -1,6 +1,6 @@
 # SLBHS — Sign Language Basic Handshapes
 
-Hand pose clustering and UMAP visualization pipeline for sign language basic handshapes.
+Hand pose clustering pipelines for sign language basic handshapes.
 
 ## Installation
 
@@ -20,81 +20,61 @@ pip install .
 
 ## Quick Start
 
+### Train K-Means
 ```bash
-# Full pipeline: load data → K-Means → SuperCluster → UMAP → plot → save
-python -m SLBHS.run_visualization --k 512 --n-super 20 --format both
-
-# With cosine features (63D scaled + 15D bone-angle cosine = 78D)
-python -m SLBHS.run_visualization --k 512 --n-super 20 --cosine-features
-
-# Skip K-Means and SuperCluster (load cached results)
-python -m SLBHS.run_visualization --skip-kmeans --skip-super
-
-# Customize UMAP sampling
-python -m SLBHS.run_visualization --k 512 --n-super 20 --overview-umap-n 10000 --sc-umap-n 2000
-
-# Customize n_neighbors for UMAP (default: 30)
-python -m SLBHS.run_visualization --k 512 --n-neighbors 10
+python -m SLBHS.run_visualization --k 512 --cosine-features
 ```
+
+### Run Big Cluster Pipeline
+```bash
+python -m SLBHS.run_pipeline --h5 /path/to/file.h5 --model-dir /path/to/model_dir --delta-t 10 --tau 0.9 --output results
+```
+
+## Input Format (H5)
+
+```
+file_crop---xxxxxxxxxx.h5
+├── aligned_63d    (N, 63)   float32  — 21 landmarks × 3 axes
+├── x_vec, y_vec, z_vec (N, 3) float32 — hand orientation vectors
+└── is_mirror     (N,) bool   — mirror flag (optional)
+```
+
+## Output Files
+
+| File | Shape | Description |
+|------|-------|-------------|
+| `similarity_matrix.npy` | (k, k) | Cosine similarity S |
+| `transition_matrix.npy` | (k, k) | Transition counts C |
+| `super_cluster_map.json` | JSON | `{token_id: super_cluster_id}` |
 
 ## CLI Arguments
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `--k` | 512 | K-Means number of clusters |
-| `--n-super` | 20 | Number of super clusters |
-| `--batch-size` | 5000 | MiniBatch K-Means batch size |
-| `--seed` | 42 | Random seed |
-| `--n-neighbors` | 30 | UMAP n_neighbors parameter |
-| `--overview-umap-n` | 10000 | UMAP overview sample size |
-| `--sc-umap-n` | 2000 | UMAP per-supercluster sample size |
-| `--data-dir` | . | H5 data directory |
-| `--results-dir` | results | Results directory |
-| `--dpi` | 200 | PNG DPI |
-| `--format` | png | Output format: png, svg, or both |
-| `--skip-kmeans` | - | Skip K-Means (load cached) |
-| `--skip-super` | - | Skip SuperCluster (load cached) |
-| `--skip-umap` | - | Skip UMAP computation (load cached) |
-| `--no-verbose` | - | Suppress K-Means iteration progress |
-| `--cosine-features` | - | Use 63D scaled + 15D cosine = 78D combined features |
+| `--h5` | — | Single H5 path |
+| `--folder` | — | Folder of H5 files (batch mode) |
+| `--model-dir` | — | Pretrained KMeans model directory (required) |
+| `--delta-t` | 10 | Transition interval |
+| `--tau` | 0.9 | Similarity threshold |
+| `--min-transitions` | 0 | Minimum transition count filter |
+| `--symmetrize` | true | Symmetrize transition matrix |
+| `--output` | results | Output directory |
 
-## Visualization
-
-Generate per-cluster representative frame PNGs:
-
-```bash
-python -m SLBHS.viz.gen_samples --results-dir results
-```
-
-Each PNG shows a 5×N grid of hand skeleton overlays with MediaPipe landmark connections.
-
-## Inference (classify new data)
-
-```python
-from SLBHS.clustering.kmeans import KMeansClusterer
-
-# Load trained model
-kc = KMeansClusterer()
-kc.load_model('results')  # loads kmeans_model.joblib + kmeans_scaler.joblib
-
-# Classify new hand pose data
-new_data = np.load('new_handposes.npz')['X']  # shape (N, 63)
-labels = kc.predict(new_data)
-```
+## Documentation
 
 ## Author
+
 Yu-Cheng Chung
 
 ## License
-See `LICENSE` file.
 
-This project is released for research purposes only.
+This project is for research use only. See `LICENSE` file for details.
 
-You are allowed to:
-- use the code to train your own models
+Permitted:
+- Use code to train your own models
 
-You are NOT allowed to:
-- use any pretrained model or outputs to train other models
-- use this work in commercial settings
+Prohibited:
+- Use pretrained models or outputs to train other models
+- Commercial use
 
-Commercial licensing is available upon request.
+For commercial licensing, contact the author.

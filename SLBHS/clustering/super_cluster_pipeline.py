@@ -284,54 +284,46 @@ class SimilarityMatrix:
 
     def compute(self, M: np.ndarray, symmetrize: bool = True) -> np.ndarray:
         """
-        從 TransitionCounter 的 C 矩陣計算相似度矩陣 S
+        Compute cosine similarity matrix S.
 
-        步驟：
-        1. 對稱化：W = (C + C.T) / 2（若 symmetrize=True）
-        2. 列歸一化：M_ij = W_ij / Σ_k(W_ik)  → 機率矩陣
-        3. Cosine Similarity：S_ij = cos(M_i, M_j)
+        For each pair (i, j), M_prob[i] and M_prob[j] exclude
+        dimension i and j before computing cosine.
 
-        Parameters
-        ----------
-        M : (1024, 1024) 原始轉移計數矩陣 C
-        symmetrize : bool — 是否對稱化（預設 True）
+        Args:
+            M (np.ndarray): (k, k) transition count matrix C
+            symmetrize (bool): whether to symmetrize W = (M + M.T) / 2
 
-        Returns
-        -------
-        S : (1024, 1024) cosine similarity matrix
+        Returns:
+            np.ndarray: (k, k) cosine similarity matrix S
         """
         from sklearn.metrics.pairwise import cosine_similarity
 
-        # 1. 對稱化（可選）
-        if symmetrize:
-            W = (M + M.T) / 2.0
-        else:
-            W = M.copy()
+        # Step 1: Symmetrize
+        W = (M + M.T) / 2.0 if symmetrize else M.copy()
 
-        # 2. 列歸一化（row-wise，即對每列 i，將其所有出現在 j 的次數 normalize）
-        row_sums = W.sum(axis=1, keepdims=True)  # (1024, 1)
-        # 避免除 0 — cold-start: zero-row 給 epsilon uniform smoothing
-        zero_mask = (row_sums.flatten() == 0)
-        if zero_mask.any():
-            epsilon = 1.0 / W.shape[1]
-            W[zero_mask] = epsilon
-            row_sums[zero_mask] = epsilon * W.shape[1]
-            logger.info(f"[SimilarityMatrix] cold-start: {zero_mask.sum()} zero-row(s) smoothed with epsilon={epsilon:.6f}")
+        # Step 2: Remove self-transitions (diagonal = 0)
+        np.fill_diagonal(W, 0)
+
+        # Step 3: Row normalization → M_prob
+        row_sums = W.sum(axis=1, keepdims=True)
         row_sums[row_sums == 0] = 1.0
-        M_prob = W / row_sums  # (1024, 1024)
+        M_prob = W / row_sums
 
-        # 3. Cosine Similarity（row-wise）
-        S = cosine_similarity(M_prob)
+        # Step 4: Compute S[i,j] = cosine(M_prob[i] excluding i/j, M_prob[j] excluding i/j)
+        k = M_prob.shape[0]
+        S = np.zeros((k, k), dtype=np.float64)
 
-        self.M_prob = M_prob
+        for i in range(k):
+            for j in range(i + 1, k):
+                mask = np.ones(k, dtype=bool)
+                mask[i] = False
+                mask[j] = False
+                vec_i = M_prob[i][mask]
+                vec_j = M_prob[j][mask]
+                S[i, j] = S[j, i] = cosine_similarity([vec_i], [vec_j])[0, 0]
+
+        np.fill_diagonal(S, 1.0)
         self.S = S
-
-        # Validation
-        row_sum_check = np.sum(M_prob, axis=1)
-        logger.info(f"[SimilarityMatrix] M_prob row_sum: min={row_sum_check.min():.6f}, "
-                    f"max={row_sum_check.max():.6f}")
-        logger.info(f"[SimilarityMatrix] S.shape={S.shape}, "
-                    f"nnz={int(np.sum(S > 0))}, nan={int(np.sum(np.isnan(S)))}")
         return S
 
 

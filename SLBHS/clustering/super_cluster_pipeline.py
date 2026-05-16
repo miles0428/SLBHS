@@ -1,18 +1,19 @@
 """
-Super Cluster Pipeline — Phase 2
+Super Cluster Pipeline — Similarity Computation
 
 超級分類 pipeline 的 OOP 架構：從時序轉移相似度找出物理等價的手型群組。
-
-作者：execution-agent（為 PM 打工）
-日期：2026-05-07
 
  Classes
 --------
 HandLabeler       : 從 vec_x × vec_y dot vec_z 的符號推斷 L/R
 TransitionCounter : 建立 Token 轉移矩陣 C[1024×1024]（分左右手加總）
 SimilarityMatrix  : 從 C 計算相似度矩陣 S（列歸一化 + Cosine Similarity）
-BigClusterer      : 根據 S_ij > tau 建邊，用 Connected Components 分群
-BigClusterPipeline: 串接全部，一鍵產出 Phase 2 結果
+SuperClusterer    : Agglomerative Hierarchical Clustering on K-Means centers（可選）
+BigClusterPipeline: 串接全部，一鍵產出相似度矩陣結果
+
+ BigClusterer removed (2026-05-16)
+  - 原本：BigClusterer.fit(S, tau) → Connected Components 分群
+  - 現在：只 compute Cosine Similarity Matrix，SuperClusterer 用 Hierarchical Clustering
 
  Validation Criteria
 --------------------
@@ -20,8 +21,8 @@ BigClusterPipeline: 串接全部，一鍵產出 Phase 2 結果
   - results/similarity_matrix.npy  — S (k, k)，無 NaN
   - results/transition_matrix.npy  — C (k, k)
   - results/symmetrized_matrix.npy — W (k, k)
-  - results/super_cluster_map.json — {token_id: super_cluster_id}
-  - results/pipeline_phase2.json  — Phase 2 完整摘要
+  - results/super_cluster_labels.npy — (k,) SuperCluster 標籤（如果 n_super 指定）
+  - results/pipeline_summary.json  — 摘要報告
 
 異常指標：出現 "Error" / "NaN" → 失敗
 
@@ -36,12 +37,12 @@ BigClusterPipeline: 串接全部，一鍵產出 Phase 2 結果
 ...     y_vec = f['y_vec'][:]
 ...     z_vec = f['z_vec'][:]
 
->>> pipeline = BigClusterPipeline(tau=0.9, model_dir='/path/to/model_dir', results_dir='results')
->>> pipeline.fit(X, x_vec, y_vec, z_vec, results_dir='results')
+>>> pipeline = BigClusterPipeline(model_dir='/path/to/model_dir', n_super=20)
+>>> pipeline.fit(X, x_vec, y_vec, z_vec)
 >>> pipeline.save('results')
 
->>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
-Super Clusters: 42
+>>> print(f"Similarity matrix: {pipeline.similarity_matrix.S.shape}")
+Similarity matrix: (1024, 1024)
 """
 
 import numpy as np
@@ -50,6 +51,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 from SLBHS.clustering.kmeans import KMeansClusterer
+from SLBHS.clustering.super_cluster import SuperClusterer
 
 logger = logging.getLogger(__name__)
 
@@ -404,31 +406,32 @@ class BigClusterPipeline:
         2. KMeans → labels（model_dir 模式：只 load 不 train）
         3. TransitionCounter.fit(labels, hand_labels) → C
         4. SimilarityMatrix.compute(C) → S
-        5. BigClusterer.fit(S, tau) → super_cluster_map
+        5. SuperClusterer (optional) — Agglomerative Hierarchical Clustering on centers
+
+    BigClusterer 已移除，改用 Cosine Similarity + Connected Components 做 token 聚類。
+    但實際上 pipeline 只負責計算相似度矩陣，不做 token 聚類。
 
     Example
     -------
-    >>> pipeline = BigClusterPipeline(tau=0.9, model_dir='/path/to/kmeans/model/')
+    >>> pipeline = BigClusterPipeline(model_dir='/path/to/kmeans/model/')
     >>> pipeline.fit(X, x_vec, y_vec, z_vec)
     >>> pipeline.save('results')
-    >>> print(f"Super Clusters: {pipeline.big_clusterer.n_clusters}")
-    Super Clusters: 42
+    >>> print(f"Similarity matrix: {pipeline.similarity_matrix.S.shape}")
+    Similarity matrix: (1024, 1024)
     """
 
     def __init__(
         self,
-        tau: float = 0.9,               # BigClusterer threshold (0.0-1.0)
         delta_t: int = 10,               # 轉移間隔 (n → n+delta_t)
         min_transitions: int = 0,        # 最小轉移次數（低於此則忽略）
         symmetrize: bool = True,         # 是否對稱化
         model_dir: Optional[str] = None, # KMeans 模型目錄（只吃預訓練模型，不 train）
         results_dir: Optional[str] = None, # pipeline 產出路徑
+        n_super: Optional[int] = None,   # SuperClusterer 數量（可選）
     ):
         """
         Parameters
         ----------
-        tau : float
-            相似度閾值（0.0-1.0），S_ij > tau → 建邊。
         delta_t : int
             轉移間隔，統計 n → n+delta_t 的轉移。
         min_transitions : int
@@ -440,25 +443,29 @@ class BigClusterPipeline:
             update()/fit() 只 load model，不 train。
         results_dir : str or None
             Pipeline 產出路徑（相似度矩陣、超級分群映射等）。
+        n_super : int or None
+            SuperClusterer 群數（Agglomerative Hierarchical Clustering）。
+            若 None，則不做 SuperClusterer。
         """
-        self.tau = tau
         self.delta_t = delta_t
         self.min_transitions = min_transitions
         self.symmetrize = symmetrize
         self.model_dir = model_dir
         self.results_dir = results_dir
+        self.n_super = n_super
         self.hand_labeler = HandLabeler()
         self.transition_counter = TransitionCounter(delta_t=delta_t, min_transitions=min_transitions)
         self.similarity_matrix = SimilarityMatrix()
-        self.big_clusterer = BigClusterer(tau=tau)
         self._fitted = False
         self._kmeans_loaded = False
         self._kmeans_clusterer = None  # KMeansClusterer instance (loaded lazily)
+        self._super_clusterer = None  # SuperClusterer instance
+        self._super_labels = None    # (k,) super cluster labels
+        self._n_clusters = None       # number of super clusters
 
     def fit(self, X: np.ndarray, x_vec: np.ndarray,
             y_vec: np.ndarray, z_vec: np.ndarray,
             labels: Optional[np.ndarray] = None,
-            tau: Optional[float] = None,
             min_transitions: Optional[int] = None,
             delta_t: Optional[int] = None,
             symmetrize: Optional[bool] = None,
@@ -472,7 +479,7 @@ class BigClusterPipeline:
         2. 若 labels 未提供：依 model_dir 載入預訓練 KMeansClusterer 後 predict
         3. TransitionCounter.fit(labels, hand_labels) → C
         4. SimilarityMatrix.compute(C) → S
-        5. BigClusterer.fit(S, tau) → super_cluster_map
+        5. SuperClusterer（可選）— Agglomerative Hierarchical Clustering on centers
 
         Parameters
         ----------
@@ -481,19 +488,20 @@ class BigClusterPipeline:
         y_vec : (N, 3) y 軸向量
         z_vec : (N, 3) z 軸向量
         labels : (N,) Token_ID；若 None 則依 model_dir 模式產生
-        tau : float — similarity threshold
+        delta_t : int — 往前看多少步
+        min_transitions : int — 最低轉移次數（低於此則清除為 0）
+        symmetrize : bool — 是否對稱化
         model_dir : str — KMeans 模型目錄（k 從 meta.json 讀取）
         results_dir : str — pipeline 產出路徑
         """
         # 解析參數（優先使用傳入值，否則用實例變數）
-        tau = tau if tau is not None else self.tau
         min_transitions = min_transitions if min_transitions is not None else self.min_transitions
         delta_t = delta_t if delta_t is not None else self.delta_t
         symmetrize = symmetrize if symmetrize is not None else self.symmetrize
         model_dir = model_dir if model_dir is not None else self.model_dir
         results_dir = results_dir if results_dir is not None else self.results_dir
 
-        logger.info(f"[BigClusterPipeline.fit] tau={tau}, "
+        logger.info(f"[BigClusterPipeline.fit] "
                     f"delta_t={delta_t}, min_transitions={min_transitions}, "
                     f"symmetrize={symmetrize}, model_dir={model_dir}")
 
@@ -548,11 +556,15 @@ class BigClusterPipeline:
         S = self.similarity_matrix.compute(C, symmetrize=symmetrize)
         logger.info(f"[Pipeline.fit] SimilarityMatrix: S.shape={S.shape}")
 
-        # Step 5：BigClusterer（傳入 tau）
-        self.big_clusterer.fit(S, tau=tau)
-        super_cluster_map = self.big_clusterer.get_clusters()
-        logger.info(f"[Pipeline.fit] BigClusterer: N_clusters="
-                    f"{self.big_clusterer.n_clusters}")
+        # Step 5：SuperClusterer（可選，Agglomerative Hierarchical Clustering）
+        if self.n_super is not None and self._kmeans_clusterer is not None:
+            centers = self._kmeans_clusterer.km.cluster_centers_
+            sc = SuperClusterer(kmeans_labels=labels, kmeans_centers=centers)
+            super_labels, frame_super = sc.fit(n_super=self.n_super, linkage='ward')
+            self._super_clusterer = sc
+            self._super_labels = super_labels
+            self._n_clusters = self.n_super
+            logger.info(f"[Pipeline.fit] SuperClusterer: n_super={self.n_super}")
 
         self._fitted = True
         self._model_dir = model_dir
@@ -620,20 +632,15 @@ class BigClusterPipeline:
         self._S_computed = False
         return self
 
-    def finalize(self, tau: Optional[float] = None) -> 'BigClusterPipeline':
+    def finalize(self) -> 'BigClusterPipeline':
         """
         所有 H5 跑完後呼叫
-        compute S + BigClusterer
-
-        Parameters
-        ----------
-        tau : float — similarity threshold（預設使用 self.tau）
+        compute S
 
         Returns
         -------
         self
         """
-        tau = tau if tau is not None else self.tau
         symmetrize = self.symmetrize
 
         C = self.transition_counter.get_matrix()
@@ -646,10 +653,16 @@ class BigClusterPipeline:
         S = self.similarity_matrix.compute(C, symmetrize=symmetrize)
         logger.info(f"[Pipeline.finalize] S.shape={S.shape}")
 
-        # BigClusterer
-        self.big_clusterer.fit(S, tau=tau)
-        self._tau_used = tau  # record actual tau for report
-        logger.info(f"[Pipeline.finalize] BigClusterer: N_clusters={self.big_clusterer.n_clusters}")
+        # SuperClusterer (optional)
+        if self.n_super is not None and self._kmeans_clusterer is not None:
+            centers = self._kmeans_clusterer.km.cluster_centers_
+            labels = self.labels
+            sc = SuperClusterer(kmeans_labels=labels, kmeans_centers=centers)
+            super_labels, frame_super = sc.fit(n_super=self.n_super, linkage='ward')
+            self._super_clusterer = sc
+            self._super_labels = super_labels
+            self._n_clusters = self.n_super
+            logger.info(f"[Pipeline.finalize] SuperClusterer: n_super={self.n_super}")
 
         self._fitted = True
         self._S_computed = True
@@ -686,21 +699,29 @@ class BigClusterPipeline:
             np.save(results_path / "symmetrized_matrix.npy", W)
             logger.info(f"[Pipeline] W 矩陣已存至 {results_path / 'symmetrized_matrix.npy'}")
 
-        # BigClusterer（原 ClusterExtractor）產出
-        if self.big_clusterer.cluster_map is not None:
-            super_cluster_map = {
-                str(k): v for k, v in self.big_clusterer.cluster_map.items()
+        # SuperClusterer 產出
+        if self._super_labels is not None:
+            np.save(results_path / "super_cluster_labels.npy", self._super_labels)
+            logger.info(f"[Pipeline] SuperCluster labels saved to "
+                        f"{results_path / 'super_cluster_labels.npy'}")
+
+            meta = {
+                'n_super': int(self._n_clusters),
+                'n_centers': self.transition_counter.k,
+                'linkage': 'ward',
             }
-            with open(results_path / "super_cluster_map.json", "w", encoding="utf-8") as f:
-                json.dump(super_cluster_map, f, indent=2)
-            logger.info(f"[Pipeline] Super Cluster Map 已存至 "
-                        f"{results_path / 'super_cluster_map.json'}")
+            with open(results_path / "super_meta.json", "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2)
+            logger.info(f"[Pipeline] SuperCluster meta saved")
 
         # 摘要報告
         report = {
-            "phase": 2,
+            "phase": "similarity",
             "k": getattr(self, '_k_used', self.transition_counter.k),
-            "tau": getattr(self, '_tau_used', self.tau),
+            "delta_t": self.delta_t,
+            "min_transitions": self.min_transitions,
+            "symmetrize": self.symmetrize,
+            "n_super": self._n_clusters,
             "feature_type": (
                 getattr(self._kmeans_clusterer, "feature_type", None)
                 if self._kmeans_clusterer is not None else None
@@ -718,9 +739,8 @@ class BigClusterPipeline:
                 "S_shape": list(self.similarity_matrix.S.shape) if self.similarity_matrix.S is not None else None,
                 "S_nan": int(np.sum(np.isnan(self.similarity_matrix.S))) if self.similarity_matrix.S is not None else None
             },
-            "big_clusterer": {
-                "n_clusters": self.big_clusterer.n_clusters,
-                "n_tokens": len(self.big_clusterer.cluster_map)
+            "super_clusterer": {
+                "n_clusters": self._n_clusters,
             }
         }
 

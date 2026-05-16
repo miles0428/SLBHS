@@ -1,26 +1,19 @@
 #!/usr/bin/env python3
 """
-run_pipeline.py — Super Cluster Pipeline CLI 入口（v3）
+run_pipeline.py — Super Cluster Pipeline CLI (v4)
 
-完全吃 K-Means model，不碰 training，只做：
-    H5 → predict → C → S → SuperCluster
+Simplified pipeline: K-Means → Transition Matrix → Cosine Similarity → (Optional) SuperClusterer
+BigClusterer removed.
 
 用法：
-    # 批次模式（多個 H5）：走 update() + finalize()
-    python run_pipeline.py \
-        --folder /path/to/h5/folder \
-        --model-dir /path/to/kmeans/model/ \
-        --delta-t 10 \
-        --tau 0.9 \
-        --output results/
+    # 批次模式（多個 H5）
+    python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ --output results/
 
-    # 單一 H5 模式（debug）：走 fit()
-    python run_pipeline.py \
-        --h5 /path/to/single.h5 \
-        --model-dir /path/to/kmeans/model/ \
-        --delta-t 10 \
-        --tau 0.9 \
-        --output results/
+    # 單一 H5 模式
+    python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --output results/
+
+    # 加上 SuperClusterer（n_super 群）
+    python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --output results/ --n-super 20
 
     # 詳細輸出
     python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
@@ -50,15 +43,15 @@ H5_CHUNK_SIZE = 200_000
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="SLBHS Super Cluster Pipeline v3 — 吃 K-Means model，不 training",
+        description="SLBHS Super Cluster Pipeline v4 — K-Means + Cosine Similarity",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 範例：
-  # 批次模式（多個 H5）
-  python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ --delta-t 10 --tau 0.9 --output results/
+  # 基本模式
+  python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ --output results/
 
-  # 單一 H5 模式
-  python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --delta-t 10 --tau 0.9 --output results/
+  # 加 SuperClusterer
+  python run_pipeline.py --h5 /path/to/file.h5 --model-dir /path/to/kmeans/model/ --output results/ --n-super 20
 
   # 詳細輸出
   python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
@@ -80,21 +73,14 @@ def parse_args():
     parser.add_argument(
         '--model-dir',
         type=str,
-        default=None,
-        help='KMeans model directory containing kmeans_model.joblib + kmeans_scaler.joblib. '
-             'Pipeline only loads model (no training). Required when using --folder.'
+        required=True,
+        help='KMeans model directory containing kmeans_model.joblib + kmeans_scaler.joblib.'
     )
     parser.add_argument(
         '--output',
         type=str,
         default='results',
         help='Results output directory. Default: results'
-    )
-    parser.add_argument(
-        '--tau',
-        type=float,
-        default=0.9,
-        help='Similarity threshold (0.0-1.0). S_ij > tau → edge. Default: 0.9'
     )
     parser.add_argument(
         '--delta-t',
@@ -113,6 +99,13 @@ def parse_args():
         type=lambda x: x.lower() in ('true', '1', 'yes'),
         default=True,
         help='Symmetrize transition matrix. Default: True'
+    )
+    parser.add_argument(
+        '--n-super',
+        type=int,
+        default=None,
+        help='Number of super clusters for SuperClusterer (Agglomerative Hierarchical). '
+             'If not specified, SuperClusterer is skipped.'
     )
     parser.add_argument(
         '-v', '--verbose',
@@ -134,25 +127,17 @@ def main():
     if args.folder and args.h5:
         raise ValueError("Cannot specify both --folder and --h5. Use one or the other.")
 
-    # Validate model_dir
-    if args.model_dir is None:
-        raise ValueError(
-            "--model-dir is required. MiniBatchKMeans fallback is not implemented "
-            "by BigClusterPipeline.fit()/update(), so the CLI cannot run without a "
-            "pre-trained model directory."
-        )
+    os.makedirs(args.output, exist_ok=True)
 
     # Common parameters
     common_kwargs = dict(
-        tau=args.tau,
         delta_t=args.delta_t,
         min_transitions=args.min_transitions,
         symmetrize=args.symmetrize,
         model_dir=args.model_dir,
         results_dir=args.output,
+        n_super=args.n_super,
     )
-
-    os.makedirs(args.output, exist_ok=True)
 
     if args.folder:
         # ── 批次模式（多個 H5）：走 update() + finalize() ──
@@ -175,8 +160,8 @@ def main():
                     z_vec = f['z_vec'][start:end].astype(np.float32)
                     pipeline.update(X, x_vec, y_vec, z_vec)
 
-        # Finalize: compute S + BigClusterer
-        pipeline.finalize(tau=args.tau)
+        # Finalize: compute S
+        pipeline.finalize()
 
     else:
         # ── 單一 H5 模式：走 fit()（直接完成）──
@@ -194,12 +179,11 @@ def main():
 
         pipeline = BigClusterPipeline(**common_kwargs)
 
-        logger.info(f"Starting pipeline: tau={args.tau}, "
-                    f"model_dir={args.model_dir}, delta_t={args.delta_t}")
+        logger.info(f"Starting pipeline: "
+                    f"model_dir={args.model_dir}, delta_t={args.delta_t}, n_super={args.n_super}")
 
         pipeline.fit(
             X, x_vec, y_vec, z_vec,
-            tau=args.tau,
             min_transitions=args.min_transitions,
             delta_t=args.delta_t,
             symmetrize=args.symmetrize,
@@ -211,17 +195,17 @@ def main():
     pipeline.save(args.output)
 
     # Summary
-    n_clusters = pipeline.big_clusterer.n_clusters
-    cluster_map = pipeline.big_clusterer.cluster_map
-
     logger.info("=" * 60)
     logger.info("Pipeline completed successfully")
     logger.info(f"  k={pipeline._k_used}")
-    logger.info(f"  tau={args.tau}")
     logger.info(f"  delta_t={args.delta_t}")
+    logger.info(f"  symmetrize={args.symmetrize}")
     logger.info(f"  model_dir={args.model_dir}")
-    logger.info(f"  N Super Clusters={n_clusters}")
-    logger.info(f"  tokens in clusters={len(cluster_map)}")
+    if args.n_super is not None:
+        logger.info(f"  n_super={args.n_super}")
+        logger.info(f"  n_clusters={pipeline._n_clusters}")
+    logger.info(f"  S.shape={pipeline.similarity_matrix.S.shape}")
+    logger.info(f"  S_nan={int(np.sum(np.isnan(pipeline.similarity_matrix.S)))}")
     logger.info(f"  results saved to: {args.output}")
     logger.info("=" * 60)
 

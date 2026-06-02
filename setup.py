@@ -33,6 +33,8 @@ setup(
     entry_points={
         "console_scripts": [
             "slbhs=SLBHS.run_visualization:main",
+            "slbhs-bigcluster=SLBHS.run_pipeline:main",
+            "slbhs-similarity=SLBHS.run_compute_similarity:main",
         ],
     },
 )

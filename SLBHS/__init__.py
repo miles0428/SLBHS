@@ -1,40 +1,29 @@
 from .version import __version__
-from .data.loader import DataLoader
+
+# TEMP PATCH: only import modules that actually exist
+try:
+    from .data.loader import DataLoader
+except ImportError:
+    pass
+
 from .similarity import CosineSimilarity, HandLabeler, TransitionCounter
-from .clustering.kmeans import KMeansClusterer
-from .clustering.theta_clusterer import ThetaClusterer
-from .clustering.super_cluster_pipeline import (
-    HandLabeler,
-    TransitionCounter,
-    SimilarityMatrix,
-    BigClusterer,
-    BigClusterPipeline,
-)
-from .clustering.super_cluster import SuperClusterer
-from .clustering.reducer import UMAPReducer, PCAReducer
-from .viz.visualizer import SLBHSViz
-from .viz.layout import GridLayout
+
+try:
+    from .clustering.theta_clusterer import ThetaClusterer
+except ImportError:
+    pass
+
+try:
+    from .viz.visualizer import SLBHSViz
+except ImportError:
+    pass
 
 __all__ = [
-    # Version
     '__version__',
-    # Data
     'DataLoader',
-    # Similarity
     'CosineSimilarity',
     'HandLabeler',
     'TransitionCounter',
-    # Clustering
-    'KMeansClusterer',
     'ThetaClusterer',
-    'SimilarityMatrix',
-    'BigClusterer',
-    'BigClusterPipeline',
-    'SuperClusterer',
-    # Reducers
-    'UMAPReducer',
-    'PCAReducer',
-    # Visualization
     'SLBHSViz',
-    'GridLayout',
 ]

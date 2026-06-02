@@ -855,6 +855,116 @@ S = sim.compute(C)
 
 ---
 
+## SimilarityPipeline (SLBHS.similarity.similarity_pipeline)
+
+End-to-end similarity computation pipeline.
+
+**Input:** `clusterer` with `predict()` method + H5 folder
+**Output:** `(k, k)` cosine similarity matrix
+
+### Constructor
+
+```python
+SimilarityPipeline(clusterer, k: int = 1024, delta_t: int = 1, min_transitions: int = 0)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| clusterer | object | required | Must have `predict(X) -> labels` method |
+| k | int | 1024 | Number of token classes |
+| delta_t | int | 1 | Steps to look back for transitions |
+| min_transitions | int | 0 | Minimum transitions to keep |
+
+**Raises:** `AttributeError` if clusterer lacks `predict()` method.
+
+### Methods
+
+#### run
+
+```python
+SimilarityPipeline.run(self, h5_folder: Union[str, Path], verbose: bool = True) -> 'SimilarityPipeline'
+```
+
+Process all H5 files in folder, build transition matrix, compute similarity. Chainable.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| h5_folder | str or Path | Folder containing H5 files |
+| verbose | bool | Print progress (default True) |
+
+#### save
+
+```python
+SimilarityPipeline.save(self, results_dir: Union[str, Path]) -> dict
+```
+
+Save similarity matrix, transition matrix, and metadata to output directory.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| results_dir | str or Path | Output directory path |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| dict | Paths to saved files (similarity_matrix.npy, transition_matrix.npy, pipeline_meta.json) |
+
+#### get_similarity_matrix
+
+```python
+SimilarityPipeline.get_similarity_matrix(self) -> np.ndarray
+```
+
+Returns the (k, k) cosine similarity matrix. Must call `run()` first.
+
+#### get_transition_matrix
+
+```python
+SimilarityPipeline.get_transition_matrix(self) -> np.ndarray
+```
+
+Returns the (k, k) transition count matrix. Must call `run()` first.
+
+### Usage Example
+
+```python
+from SLBHS.clustering import ThetaClusterer
+from SLBHS.similarity import SimilarityPipeline
+
+# Load pre-trained clusterer
+clusterer = ThetaClusterer()
+clusterer.load('/path/to/model/')
+
+# Create pipeline
+pipeline = SimilarityPipeline(clusterer=clusterer, k=1024)
+
+# Run on all H5 files
+pipeline.run(h5_folder='/path/to/h5/')
+
+# Save results
+pipeline.save('/path/to/results/')
+```
+
+---
+
+## AttributeError: clusterer lacks predict()
+
+Raised when clusterer passed to `SimilarityPipeline` does not have a `predict()` method.
+
+**Example:**
+```python
+from SLBHS.similarity import SimilarityPipeline
+
+class BadClusterer:
+    pass
+
+try:
+    p = SimilarityPipeline(clusterer=BadClusterer())
+except AttributeError as e:
+    print(e)  # clusterer must have a 'predict' method. Got BadClusterer...
+```
+
+---
+
 ## `SLBHS.clustering.kmeans`
 
 ### `KMeansClusterer`

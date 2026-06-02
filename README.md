@@ -46,7 +46,7 @@ from SLBHS.similarity import SimilarityPipeline
 
 # Train clusterer (one-time)
 clusterer = ThetaClusterer()
-clusterer.fit(h5_folder='/path/to/h5/', top_k=10000)
+clusterer.fit(h5_folder='/path/to/h5/', top_k=1024)
 clusterer.save('/path/to/model/')
 
 # Load and run pipeline

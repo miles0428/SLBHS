@@ -56,14 +56,6 @@ pipeline.run(h5_folder='/path/to/h5/')
 pipeline.save('/path/to/results/')
 ```
 
-### KMeans (legacy)
-
-```bash
-python -m SLBHS.run_visualization --k 512 --cosine-features
-```
-
-## Input Format (H5)
-
 ```
 file_crop---xxxxxxxxxx.h5
 ├── aligned_63d    (N, 63)   float32  — 21 landmarks × 3 axes

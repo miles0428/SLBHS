@@ -1327,47 +1327,5 @@ X, meta = loader.load()
 print(f"Loaded {meta['n_frames']} frames from {meta['n_files']} files")
 ```
 
----
 
-_Last updated: 2026-05-07_
-
----
-
-## `SLBHS.viz.similarity_heatmap`
-
-Standalone entry point for similarity heatmap visualization.
-
-### Usage
-
-```bash
-cd /home/ubuntu/.openclaw/workspace-coding/SLBHS && source venv/bin/activate
-python SLBHS/viz/similarity_heatmap.py --input /path/to/symmetrized_matrix.npy --output heatmap.png
-```
-
-### Arguments
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--input` | `~/.openclaw/media/inbound/symmetrized_matrix---dec21f33-b895-4377-a969-a4a6b7f7493c.npy` | Path to symmetrized matrix (.npy) |
-| `--output` | `~/.openclaw/media/inbound/similarity_heatmap.png` | Output PNG path |
-
-### What it does
-
-1. Loads symmetrized transition matrix W
-2. Row-normalizes to probability matrix M_prob
-3. For each pair (i, j): computes cosine similarity of M_prob[i] and M_prob[j] **with dimensions i and j excluded** — this prevents self-correlation from inflating similarity scores
-4. Renders heatmap using magma colormap
-
-### Output
-
-- PNG heatmap saved to `--output`
-- `similarity_matrix_heatmap.npy` saved alongside (same directory as `--output`)
-
-### Example
-
-```bash
-python SLBHS/viz/similarity_heatmap.py \
-    --input results/symmetrized_matrix.npy \
-    --output results/similarity_heatmap.png
-```
 

@@ -317,7 +317,7 @@ class ThetaClusterer:
     # Fit (H5-based, new architecture)
     # --------------------------------------------------------------------------
 
-    def fit(self, h5_folder=None, X=None, top_k=10000, verbose=True):
+    def fit(self, h5_folder=None, X=None, top_k=1024, verbose=True):
         """
         Train the classifier.
 

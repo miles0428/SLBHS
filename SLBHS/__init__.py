@@ -1,6 +1,8 @@
 from .version import __version__
 from .data.loader import DataLoader
+from .similarity import CosineSimilarity, HandLabeler, TransitionCounter
 from .clustering.kmeans import KMeansClusterer
+from .clustering.theta_clusterer import ThetaClusterer
 from .clustering.super_cluster_pipeline import (
     HandLabeler,
     TransitionCounter,
@@ -18,10 +20,13 @@ __all__ = [
     '__version__',
     # Data
     'DataLoader',
-    # Clustering
-    'KMeansClusterer',
+    # Similarity
+    'CosineSimilarity',
     'HandLabeler',
     'TransitionCounter',
+    # Clustering
+    'KMeansClusterer',
+    'ThetaClusterer',
     'SimilarityMatrix',
     'BigClusterer',
     'BigClusterPipeline',

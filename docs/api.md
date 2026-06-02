@@ -691,6 +691,170 @@ Save outputs to results_dir.
 
 ---
 
+## CosineSimilarity (SLBHS.similarity.cosine_similarity)
+
+Cosine similarity matrix computation from transition count matrix.
+
+**Input:** `M: np.ndarray (k, k)` — transition count matrix
+**Output:** `S: np.ndarray (k, k)` — cosine similarity matrix
+
+### Constructor
+
+```python
+CosineSimilarity()
+```
+
+### Methods
+
+#### compute
+
+```python
+CosineSimilarity.compute(self, M: np.ndarray, symmetrize: bool = True) -> np.ndarray
+```
+
+Compute cosine similarity matrix S.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| M | np.ndarray | required | (k, k) transition count matrix |
+| symmetrize | bool | True | Symmetrize W = (M + M.T) / 2 |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| S | np.ndarray | (k, k) cosine similarity matrix |
+
+#### get_matrix
+
+```python
+CosineSimilarity.get_matrix(self) -> np.ndarray
+```
+
+Returns the computed similarity matrix.
+
+---
+
+## HandLabeler (SLBHS.similarity.hand_labeler)
+
+Classify L/R hand from orientation vectors.
+
+**Input:** `x_vec, y_vec, z_vec: np.ndarray (N, 3)`
+**Output:** `hand_labels: np.ndarray (N,)` — 'L' or 'R'
+
+### Constructor
+
+```python
+HandLabeler()
+```
+
+### Methods
+
+#### fit_predict
+
+```python
+HandLabeler.fit_predict(self, x_vec: np.ndarray, y_vec: np.ndarray, z_vec: np.ndarray) -> np.ndarray
+```
+
+Fit and predict L/R hand labels.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| x_vec | np.ndarray | (N, 3) x-axis vectors |
+| y_vec | np.ndarray | (N, 3) y-axis vectors |
+| z_vec | np.ndarray | (N, 3) z-axis vectors |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| hand_labels | np.ndarray | (N,) '<U1' 'L' or 'R' |
+
+#### fit
+
+```python
+HandLabeler.fit(self, x_vec: np.ndarray, y_vec: np.ndarray, z_vec: np.ndarray) -> None
+```
+
+Sklearn-style fit (stores results internally).
+
+#### predict
+
+```python
+HandLabeler.predict(self, x_vec: np.ndarray, y_vec: np.ndarray, z_vec: np.ndarray) -> np.ndarray
+```
+
+Predict L/R hand labels (requires prior fit).
+
+---
+
+## TransitionCounter (SLBHS.similarity.transition_counter)
+
+Build token transition matrix C[k x k].
+
+**Input:** `labels: np.ndarray (N,)`, `hand_labels: np.ndarray (N,)`
+**Output:** `C: np.ndarray (k, k)` — transition count matrix
+
+### Constructor
+
+```python
+TransitionCounter(k: int = 1024, delta_t: int = 1, min_transitions: int = 0)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| k | int | 1024 | Total number of tokens |
+| delta_t | int | 1 | Steps to look back |
+| min_transitions | int | 0 | Minimum transitions to keep |
+
+### Methods
+
+#### fit
+
+```python
+TransitionCounter.fit(self, labels: np.ndarray, hand_labels: np.ndarray, delta_t: int = None, min_transitions: int = None) -> self
+```
+
+Build transition matrix from labels and hand labels. Chainable.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| labels | np.ndarray | (N,) token IDs (0 to k-1) |
+| hand_labels | np.ndarray | (N,) 'L'/'R' hand labels |
+
+#### update
+
+```python
+TransitionCounter.update(self, labels_batch: np.ndarray, hand_labels_batch: np.ndarray) -> self
+```
+
+Add a batch of labels to the transition matrix (cumulative). Chainable.
+
+#### get_matrix
+
+```python
+TransitionCounter.get_matrix(self) -> np.ndarray
+```
+
+Returns the transition count matrix C (k, k).
+
+### Usage Example
+
+```python
+from SLBHS.similarity import CosineSimilarity, HandLabeler, TransitionCounter
+
+# Hand classification
+labeler = HandLabeler()
+hand_labels = labeler.fit_predict(x_vec, y_vec, z_vec)
+
+# Build transition matrix
+counter = TransitionCounter(k=1024, delta_t=1)
+counter.fit(labels, hand_labels)
+C = counter.get_matrix()
+
+# Compute similarity
+sim = CosineSimilarity()
+S = sim.compute(C)
+```
+
+---
+
 ## `SLBHS.clustering.kmeans`
 
 ### `KMeansClusterer`

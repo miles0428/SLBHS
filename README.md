@@ -2,6 +2,23 @@
 
 Hand pose clustering pipelines for sign language basic handshapes.
 
+## Package Structure
+
+```
+SLBHS/
+├── clustering/        # Clustering modules
+│   ├── theta_clusterer.py   # ThetaClusterer (main classifier)
+├── similarity/        # Similarity computation pipeline
+│   ├── similarity_pipeline.py  # SimilarityPipeline (end-to-end)
+│   ├── transition_counter.py   # TransitionCounter
+│   ├── cosine_similarity.py    # CosineSimilarity
+│   └── hand_labeler.py        # HandLabeler
+├── data/
+│   └── loader.py      # DataLoader for H5 files
+└── viz/
+    └── ...            # Visualization modules
+```
+
 ## Installation
 
 ### Install directly from GitHub (no local clone needed)
@@ -20,17 +37,23 @@ pip install .
 
 ## Quick Start
 
-### Train K-Means
-```bash
-python -m SLBHS.run_visualization --k 512 --cosine-features
-```
+### ThetaClusterer + SimilarityPipeline (recommended)
 
-### Run Big Cluster Pipeline
-```bash
-python -m SLBHS.run_pipeline --h5 /path/to/file.h5 --model-dir /path/to/model_dir --delta-t 10 --tau 0.9 --output results
-```
+```python
+from SLBHS.clustering import ThetaClusterer
+from SLBHS.similarity import SimilarityPipeline
 
-## Input Format (H5)
+# Train clusterer (one-time)
+clusterer = ThetaClusterer()
+clusterer.fit(h5_folder='/path/to/h5/', top_k=1024)
+clusterer.save('/path/to/model/')
+
+# Load and run pipeline
+clusterer.load('/path/to/model/')
+pipeline = SimilarityPipeline(clusterer=clusterer, k=1024)
+pipeline.run(h5_folder='/path/to/h5/')
+pipeline.save('/path/to/results/')
+```
 
 ```
 file_crop---xxxxxxxxxx.h5
@@ -47,21 +70,13 @@ file_crop---xxxxxxxxxx.h5
 | `transition_matrix.npy` | (k, k) | Transition counts C |
 | `super_cluster_map.json` | JSON | `{token_id: super_cluster_id}` |
 
-## CLI Arguments
+## CLI
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--h5` | — | Single H5 path |
-| `--folder` | — | Folder of H5 files (batch mode) |
-| `--model-dir` | — | Pretrained KMeans model directory (required) |
-| `--delta-t` | 10 | Transition interval |
-| `--tau` | 0.9 | Similarity threshold |
-| `--min-transitions` | 0 | Minimum transition count filter |
-| `--symmetrize` | true | Symmetrize transition matrix |
-| `--output` | results | Output directory |
+Current usage is through the Python API shown above.
 
 ## Documentation
 
+Detailed API reference: see `docs/api.md`
 ## Author
 
 Yu-Cheng Chung

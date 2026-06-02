@@ -46,68 +46,26 @@ features = compute_cosine_features(landmarks)  # shape (N, 15)
 
 ---
 
-## `SLBHS.clustering.super_cluster`
+> **⚠️ DEPRECATED** — Removed in commit `30432a4`. Historical record only.
+## `SLBHS.clustering.super_cluster` (DEPRECATED)
 
 ### `SuperClusterer`
 
 Hierarchical clustering of K-Means centers into super clusters via agglomerative clustering.
 
-#### Constructor
-
-```python
-SuperClusterer(kmeans_labels=None, kmeans_centers=None, results_dir=None)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `kmeans_labels` | np.ndarray (N,) | None | Per-frame K-Means labels |
-| `kmeans_centers` | np.ndarray (k, 63) | None | K-Means cluster centers |
-| `results_dir` | str | auto | Save location |
-
-#### Methods
-
-##### `fit(n_super=20, linkage='ward', metric='euclidean') -> Tuple[np.ndarray, np.ndarray]`
-
-Run agglomerative clustering on centers.
-
-**Parameters**
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `n_super` | int | 20 | Number of super clusters |
-| `linkage` | str | 'ward' | Linkage method: 'ward', 'complete', 'average', 'single' |
-| `metric` | str | 'euclidean' | Distance metric |
-
-**Returns**
-- `super_labels`: `(k,)` int — super cluster ID per center
-- `frame_super`: `(N,)` int — super cluster ID per frame
-
-##### `save(results_dir=None) -> dict`
-
-Save `super_labels.npy` and `super_meta.json`.
-
-**Returns**
-- `dict` — paths of saved files
-
-##### `load(results_dir=None) -> np.ndarray`
-
-Load `super_labels.npy` from disk.
-
-**Returns**
-- `super_labels`: `(k,)` int
-
-**Examples**
-
-```python
-from SLBHS.clustering.super_cluster import SuperClusterer
-
-sc = SuperClusterer(kmeans_labels=labels, kmeans_centers=centers)
-super_labels, frame_super = sc.fit(n_super=20, linkage='ward')
-sc.save()
-```
+*(This module was removed. Use `ThetaClusterer` from `SLBHS.clustering.theta_clusterer` for hand-pose classification, or `SimilarityPipeline` from `SLBHS.similarity` for token-transition similarity analysis.)*
 
 ---
 
+## `SLBHS.clustering.kmeans` (DEPRECATED)
+
+### `KMeansClusterer`
+
+K-Means clusterer with inference support.
+
+*(This module was removed. Use `ThetaClusterer` from `SLBHS.clustering.theta_clusterer` for hand-pose classification.)*
+
+---
 ## `SLBHS.clustering.reducer`
 
 ### `UMAPReducer`
@@ -377,75 +335,15 @@ print(__version__)  # '0.1.10'
 ---
 
 
-## CLI Scripts
+> **⚠️ DEPRECATED** — These scripts were removed in commit `23143cd`. Historical record only.
+
+## CLI Scripts (DEPRECATED)
 
 ### `run_pipeline.py`
 
-Super Cluster Pipeline CLI — loads a pre-trained K-Means model and processes H5 files to produce super clusters.
+Super Cluster Pipeline CLI.
 
-#### `parse_args() -> argparse.Namespace`
-
-Parse command-line arguments for the pipeline.
-
-**Returns**
-- `argparse.Namespace` with the following attributes:
-
-| Attribute | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `folder` | str | None | Path to folder containing multiple H5 files (batch mode via `update()+finalize()`) |
-| `h5` | str | None | Path to a single H5 file (single-file mode via `fit()`) |
-| `model_dir` | str | None | KMeans model directory containing `kmeans_model.joblib` + `kmeans_scaler.joblib` |
-| `output` | str | 'results' | Results output directory |
-| `tau` | float | 0.9 | Similarity threshold (0.0–1.0). `S_ij > tau` → edge. Default: 0.9 |
-| `delta_t` | int | 10 | Transition interval (`n → n+delta_t`). Default: 10 |
-| `min_transitions` | int | 0 | Minimum transition count. Pairs below this are zeroed. Default: 0 |
-| `symmetrize` | bool | True | Symmetrize transition matrix |
-| `verbose` | bool | False | Enable verbose (DEBUG) logging |
-
-**Modes**
-
-| Mode | Flag | Method called |
-|------|------|---------------|
-| Batch (multiple H5) | `--folder` | `pipeline.update()` + `pipeline.finalize()` |
-| Single H5 | `--h5` | `pipeline.fit()` directly |
-
-**Examples**
-
-```bash
-# Batch mode (multiple H5 files)
-python run_pipeline.py \\
-    --folder /path/to/h5/folder \\
-    --model-dir /path/to/kmeans/model/ \\
-    --delta-t 10 \\
-    --tau 0.9 \\
-    --output results/
-
-# Single H5 mode (debug)
-python run_pipeline.py \\
-    --h5 /path/to/file.h5 \\
-    --model-dir /path/to/kmeans/model/ \\
-    --delta-t 10 \\
-    --tau 0.9 \\
-    --output results/
-
-# Verbose output
-python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
-```
-
-#### `main() -> int`
-
-Entry point for the CLI script. Returns 0 on success, non-zero on failure.
-
-**Process**
-1. Parse arguments with `parse_args()`
-2. Validate input (exactly one of `--folder` or `--h5` required)
-3. Load H5 data (`aligned_63d`, `x_vec`, `y_vec`, `z_vec`)
-4. Run pipeline (`update()+finalize()` or `fit()`)
-5. Save results with `pipeline.save()`
-6. Print summary (k, tau, delta_t, model_dir, N Super Clusters, tokens in clusters)
-
-**Returns**
-- `int` — exit code (0 = success)
+*(This script was removed. Use `ThetaClusterer` + `SimilarityPipeline` chaining for the equivalent pipeline.)*
 
 ---
 
@@ -473,7 +371,7 @@ Fit and predict hand labels.
 **Examples**
 
 ```python
-from SLBHS.clustering.super_cluster_pipeline import HandLabeler
+from SLBHS.similarity.hand_labeler import HandLabeler
 
 labeler = HandLabeler()
 hand_labels = labeler.fit_predict(x_vec, y_vec, z_vec)
@@ -525,167 +423,301 @@ Get transition matrix.
 
 ---
 
-## `SimilarityMatrix`
+## `SimilarityMatrix` (DEPRECATED)
 
 Computes similarity matrix S from transition matrix.
 
-### Methods
-
-#### `compute(M, symmetrize=True) -> np.ndarray`
-
-Compute similarity matrix.
-
-**Parameters**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `M` | (k, k) float64 | Raw transition count matrix C |
-| `symmetrize` | bool | Symmetrize matrix (default True) |
-
-**Returns**
-- `(k, k)` float64 — cosine similarity matrix S
-
-**Process**
-1. Symmetrize: `W = (M + M.T) / 2`
-2. Row normalize: `M_ij = W_ij / Σ_k(W_ik)`
-3. Cosine similarity: `S_ij = cos(M_i, M_j)`
+*(This module was removed. Use `CosineSimilarity` from `SLBHS.similarity.cosine_similarity` instead.)*
 
 ---
 
-## `BigClusterer`
+## `BigClusterer` (DEPRECATED)
 
 Extracts Super Clusters based on similarity threshold.
 
-### Constructor
-
-```python
-BigClusterer(tau=0.9)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `tau` | float | 0.9 | Similarity threshold (0.0-1.0) |
-
-### Methods
-
-#### `fit(S, tau=None) -> self`
-
-Extract Super Clusters from similarity matrix S.
-
-**Parameters**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `S` | (k, k) float64 | Cosine similarity matrix |
-| `tau` | float or None | Override constructor's tau |
-
-**Returns**
-- `self`
-
-#### `get_clusters() -> dict`
-
-Get Super Cluster mapping.
-
-**Returns**
-- `dict` — `{token_id: super_cluster_id}`
+*(This module was removed. Super-cluster extraction is now handled by `ThetaClusterer.generate_report()` and `SimilarityPipeline` from `SLBHS.similarity`.)*
 
 ---
 
-## `BigClusterPipeline`
+## `BigClusterPipeline` (DEPRECATED)
 
 Chains all steps, one-shot Phase 2 output.
+
+*(This module was removed. Use `ThetaClusterer` + `SimilarityPipeline` chaining instead.)*
+
+---
+
+## CosineSimilarity (SLBHS.similarity.cosine_similarity)
+
+Cosine similarity matrix computation from transition count matrix.
+
+**Input:** `M: np.ndarray (k, k)` — transition count matrix
+**Output:** `S: np.ndarray (k, k)` — cosine similarity matrix
 
 ### Constructor
 
 ```python
-BigClusterPipeline(
-    k=512,
-    tau=0.9,
-    delta_t=10,
-    min_transitions=0,
-    symmetrize=True,
-    model_dir=None,
-    results_dir=None
-)
+CosineSimilarity()
+```
+
+### Methods
+
+#### compute
+
+```python
+CosineSimilarity.compute(self, M: np.ndarray, symmetrize: bool = True) -> np.ndarray
+```
+
+Compute cosine similarity matrix S.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| M | np.ndarray | required | (k, k) transition count matrix |
+| symmetrize | bool | True | Symmetrize W = (M + M.T) / 2 |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| S | np.ndarray | (k, k) cosine similarity matrix |
+
+#### get_matrix
+
+```python
+CosineSimilarity.get_matrix(self) -> np.ndarray
+```
+
+Returns the computed similarity matrix.
+
+---
+
+## HandLabeler (SLBHS.similarity.hand_labeler)
+
+Classify L/R hand from orientation vectors.
+
+**Input:** `x_vec, y_vec, z_vec: np.ndarray (N, 3)`
+**Output:** `hand_labels: np.ndarray (N,)` — 'L' or 'R'
+
+### Constructor
+
+```python
+HandLabeler()
+```
+
+### Methods
+
+#### fit_predict
+
+```python
+HandLabeler.fit_predict(self, x_vec: np.ndarray, y_vec: np.ndarray, z_vec: np.ndarray) -> np.ndarray
+```
+
+Fit and predict L/R hand labels.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| x_vec | np.ndarray | (N, 3) x-axis vectors |
+| y_vec | np.ndarray | (N, 3) y-axis vectors |
+| z_vec | np.ndarray | (N, 3) z-axis vectors |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| hand_labels | np.ndarray | (N,) '<U1' 'L' or 'R' |
+
+#### fit
+
+```python
+HandLabeler.fit(self, x_vec: np.ndarray, y_vec: np.ndarray, z_vec: np.ndarray) -> None
+```
+
+Sklearn-style fit (stores results internally).
+
+#### predict
+
+```python
+HandLabeler.predict(self, x_vec: np.ndarray, y_vec: np.ndarray, z_vec: np.ndarray) -> np.ndarray
+```
+
+Predict L/R hand labels (requires prior fit).
+
+---
+
+## TransitionCounter (SLBHS.similarity.transition_counter)
+
+Build token transition matrix C[k x k].
+
+**Input:** `labels: np.ndarray (N,)`, `hand_labels: np.ndarray (N,)`
+**Output:** `C: np.ndarray (k, k)` — transition count matrix
+
+### Constructor
+
+```python
+TransitionCounter(k: int = 1024, delta_t: int = 1, min_transitions: int = 0)
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `k` | int | 512 | K-Means cluster count |
-| `tau` | float | 0.9 | Similarity threshold |
-| `delta_t` | int | 10 | Transition interval |
-| `min_transitions` | int | 0 | Minimum transition count |
-| `symmetrize` | bool | True | Symmetrize matrix |
-| `model_dir` | str or None | None | KMeans model directory (kmeans_model.joblib + kmeans_scaler.joblib) |
-| `results_dir` | str or None | None | Pipeline output directory |
+| k | int | 1024 | Total number of tokens |
+| delta_t | int | 1 | Steps to look back |
+| min_transitions | int | 0 | Minimum transitions to keep |
 
 ### Methods
 
-#### `fit(X, x_vec, y_vec, z_vec, labels=None, tau=None, min_transitions=None, delta_t=None, symmetrize=None, model_dir=None, results_dir=None) -> self`
+#### fit
 
-Run full pipeline.
+```python
+TransitionCounter.fit(self, labels: np.ndarray, hand_labels: np.ndarray, delta_t: int = None, min_transitions: int = None) -> self
+```
 
-**Parameters**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `X` | (N, 63) float32 | aligned_63d hand pose data |
-| `x_vec` | (N, 3) float32 | x-axis vector |
-| `y_vec` | (N, 3) float32 | y-axis vector |
-| `z_vec` | (N, 3) float32 | z-axis vector |
-| `labels` | (N,) int or None | None | Token_ID per frame (input); if None, generated internally from X with loaded model |
-| `tau` | float or None | Override constructor's tau |
-
-| `min_transitions` | int or None | Override constructor's min_transitions |
-| `delta_t` | int or None | Override constructor's delta_t |
-| `symmetrize` | bool or None | Override constructor's symmetrize |
-| `model_dir` | str or None | KMeans model directory (kmeans_model.joblib + kmeans_scaler.joblib) |
-| `results_dir` | str or None | Override constructor's results_dir |
-
-**Returns**
-- `self`
-
-#### `update(X, x_vec, y_vec, z_vec) -> self`
-
-Accumulate one H5 file's data into the transition counter (batch mode).
-KMeans model is loaded once on first call, then reused for subsequent calls.
-Does **not** compute S or run BigClusterer — call `finalize()` after all updates.
+Build transition matrix from labels and hand labels. Chainable.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `X` | (N, 63) float32 | aligned_63d hand pose data |
-| `x_vec` | (N, 3) float32 | x-axis vector |
-| `y_vec` | (N, 3) float32 | y-axis vector |
-| `z_vec` | (N, 3) float32 | z-axis vector |
+| labels | np.ndarray | (N,) token IDs (0 to k-1) |
+| hand_labels | np.ndarray | (N,) 'L'/'R' hand labels |
 
-**Returns**
-- `self`
+#### update
 
-#### `finalize(tau=None) -> self`
+```python
+TransitionCounter.update(self, labels_batch: np.ndarray, hand_labels_batch: np.ndarray) -> self
+```
 
-Compute similarity matrix S and run BigClusterer.
-Call after all `update()` calls.
+Add a batch of labels to the transition matrix (cumulative). Chainable.
+
+#### get_matrix
+
+```python
+TransitionCounter.get_matrix(self) -> np.ndarray
+```
+
+Returns the transition count matrix C (k, k).
+
+### Usage Example
+
+```python
+from SLBHS.similarity import CosineSimilarity, HandLabeler, TransitionCounter
+
+# Hand classification
+labeler = HandLabeler()
+hand_labels = labeler.fit_predict(x_vec, y_vec, z_vec)
+
+# Build transition matrix
+counter = TransitionCounter(k=1024, delta_t=1)
+counter.fit(labels, hand_labels)
+C = counter.get_matrix()
+
+# Compute similarity
+sim = CosineSimilarity()
+S = sim.compute(C)
+```
+
+---
+
+## SimilarityPipeline (SLBHS.similarity.similarity_pipeline)
+
+End-to-end similarity computation pipeline.
+
+**Input:** `clusterer` with `predict()` method + H5 folder
+**Output:** `(k, k)` cosine similarity matrix
+
+### Constructor
+
+```python
+SimilarityPipeline(clusterer, k: int = 1024, delta_t: int = 1, min_transitions: int = 0)
+```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `tau` | float | self.tau | Similarity threshold |
+| clusterer | object | required | Must have `predict(X) -> labels` method |
+| k | int | 1024 | Number of token classes |
+| delta_t | int | 1 | Steps to look back for transitions |
+| min_transitions | int | 0 | Minimum transitions to keep |
 
-**Returns**
-- `self`
+**Raises:** `AttributeError` if clusterer lacks `predict()` method.
 
-#### `save(results_dir) -> None`
+### Methods
 
-Save outputs to results_dir.
+#### run
 
-**Output Files**
+```python
+SimilarityPipeline.run(self, h5_folder: Union[str, Path], verbose: bool = True) -> 'SimilarityPipeline'
+```
 
-| File | Format | Description |
-|------|--------|-------------|
-| `similarity_matrix.npy` | (k, k) float64 | Cosine similarity matrix S |
-| `transition_matrix.npy` | (k, k) float64 | Raw transition count matrix C |
-| `symmetrized_matrix.npy` | (k, k) float64 | Symmetrized matrix W |
-| `super_cluster_map.json` | JSON | `{token_id: super_cluster_id}` |
-| `pipeline_phase2.json` | JSON | Phase 2 full summary |
+Process all H5 files in folder, build transition matrix, compute similarity. Chainable.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| h5_folder | str or Path | Folder containing H5 files |
+| verbose | bool | Print progress (default True) |
+
+#### save
+
+```python
+SimilarityPipeline.save(self, results_dir: Union[str, Path]) -> dict
+```
+
+Save similarity matrix, transition matrix, and metadata to output directory.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| results_dir | str or Path | Output directory path |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| dict | Paths to saved files (similarity_matrix.npy, transition_matrix.npy, pipeline_meta.json) |
+
+#### get_similarity_matrix
+
+```python
+SimilarityPipeline.get_similarity_matrix(self) -> np.ndarray
+```
+
+Returns the (k, k) cosine similarity matrix. Must call `run()` first.
+
+#### get_transition_matrix
+
+```python
+SimilarityPipeline.get_transition_matrix(self) -> np.ndarray
+```
+
+Returns the (k, k) transition count matrix. Must call `run()` first.
+
+### Usage Example
+
+```python
+from SLBHS.clustering import ThetaClusterer
+from SLBHS.similarity import SimilarityPipeline
+
+# Load pre-trained clusterer
+clusterer = ThetaClusterer()
+clusterer.load('/path/to/model/')
+
+# Create pipeline
+pipeline = SimilarityPipeline(clusterer=clusterer, k=1024)
+
+# Run on all H5 files
+pipeline.run(h5_folder='/path/to/h5/')
+
+# Save results
+pipeline.save('/path/to/results/')
+```
+
+---
+
+## AttributeError: clusterer lacks predict()
+
+Raised when clusterer passed to `SimilarityPipeline` does not have a `predict()` method.
+
+**Example:**
+```python
+from SLBHS.similarity import SimilarityPipeline
+
+class BadClusterer:
+    pass
+
+try:
+    p = SimilarityPipeline(clusterer=BadClusterer())
+except AttributeError as e:
+    print(e)  # clusterer must have a 'predict' method. Got BadClusterer...
+```
 
 ---
 
@@ -887,6 +919,263 @@ labels = kc.predict(new_data)
 
 ---
 
+## `SLBHS.clustering.theta_clusterer`
+
+### `ThetaClusterer`
+
+Hand pose classifier based on circular angle features with fuzzy coarse coding.
+
+**Three-stage pipeline:**
+1. Theta Extraction — 9 bending angles + 4 spread angles from aligned_63d
+2. Fuzzy Coarse Coding — angles quantized via overlapping state bands → bitstrings
+3. Frequency Classification — each unique bitstring is a class; OOV fallback by Hamming similarity
+
+**Input:** `X: np.ndarray (N, 63)` — aligned_63d from buildDatasetFromVideo.py
+
+**Output:** `labels: np.ndarray (N,) int32` — class label IDs in [0, n_classes_-1]
+
+#### Constructor
+
+```python
+ThetaClusterer(results_dir=None)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `results_dir` | str | None | Directory for model artifacts. Defaults to `<module_dir>/results` |
+
+#### Methods
+
+##### `fit`
+
+```python
+ThetaClusterer.fit(self, h5_folder=None, X=None, top_k=10000, verbose=True) -> self
+```
+
+Train the classifier.
+
+**New mode (H5 folder):**
+```python
+clf.fit(h5_folder='/path/to/h5/folder/', top_k=10000)
+```
+Scans all `*.h5` files, extracts thetas, builds top-k frequency table. High frequency → small label ID.
+
+**Legacy mode (array):**
+```python
+clf.fit(X=np.array)  # (N, 63) aligned poses
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `h5_folder` | str | None | Path to folder containing H5 files (new mode) |
+| `X` | np.ndarray | None | (N, 63) aligned poses (legacy mode) |
+| `top_k` | int | 10000 | Maximum number of classes to keep (new mode) |
+| `verbose` | bool | True | Print progress |
+
+##### `predict`
+
+```python
+ThetaClusterer.predict(self, X_new) -> np.ndarray
+```
+
+Predict class labels for new aligned_63d data.
+
+```python
+labels = clf.predict(X_new)  # X_new: (M, 63) → labels: (M,)
+```
+
+**OOV handling:** If bitstring is unknown, find the stored class with most shared 1-bits (Hamming similarity). Ties broken by higher frequency.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `X_new` | np.ndarray | (M, 63) aligned hand poses |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| labels | np.ndarray | (M,) int32 class IDs in [0, n_classes_-1] |
+
+##### `save`
+
+```python
+ThetaClusterer.save(self, path=None) -> dict
+```
+
+Persist model to directory.
+
+```python
+clf.save('/path/to/model/')
+```
+
+Supports both legacy (byte-keyed) and new (string-keyed) architectures. Directory layout:
+- `theta_labels_str.json` — bitstring (str) → label_id
+- `theta_ltb_str.json` — label_id → bitstring
+- `theta_counts_str.json` — label_id → count
+- `theta_meta.json` — metadata including n_classes_, top_k_
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | str | None | Output directory. Defaults to self.results_dir |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| dict | {'meta': meta_path} |
+
+##### `load`
+
+```python
+ThetaClusterer.load(self, path=None) -> self
+```
+
+Load model artifacts from directory.
+
+```python
+clf.load('/path/to/model/')
+```
+
+Auto-detects architecture (legacy byte-keyed or new string-keyed).
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | str | None | Input directory. Defaults to self.results_dir |
+
+##### `histogram`
+
+```python
+ThetaClusterer.histogram(self, n=20) -> list[dict]
+```
+
+Return top N most frequent encoding statistics.
+
+```python
+hist = clf.histogram(n=20)
+# [{'rank': 1, 'label': 0, 'bitstring': '000010...', 'count': 5717, 'bending_states': [...], 'spread_states': [...]}]
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `n` | int | 20 | Number of top entries to return |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| list[dict] | List of dicts with keys: rank, label, bitstring, count, bending_states, spread_states |
+
+##### `generate_report`
+
+```python
+ThetaClusterer.generate_report(self, h5_folder, output_path, top_n=1024, samples_per_class=3) -> str
+```
+
+Generate analysis report with top N encoding sample coordinates.
+
+```python
+clf.generate_report(
+    h5_folder='/path/to/h5/',
+    output_path='/path/to/report.txt',
+    top_n=1024,
+    samples_per_class=2
+)
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `h5_folder` | str | required | Path to H5 folder (for raw coordinates) |
+| `output_path` | str | required | Output report file path |
+| `top_n` | int | 1024 | Report only top_n rankings |
+| `samples_per_class` | int | 3 | Number of samples per class |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| output_path | str | Path to the generated report file (e.g., `/path/to/report.txt`) |
+
+#### Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `n_classes_` | int | Number of classes after pruning |
+| `top_k_` | int | top_k value used during fit |
+| `results_dir` | str | Directory for model artifacts |
+
+#### Angle Extraction
+
+##### Bending Angles (9 angles)
+
+Points are 0-based MediaPipe landmark indices. Formula: `θ = arccos((A-B)·(C-B) / (|A-B|·|C-B|))`
+
+| Index | Finger | Joint | Points | Description |
+|-------|--------|-------|--------|-------------|
+| 0 | thumb | MCP→IP→TIP | 2→3→4 | Thumb curling |
+| 1 | index | PIP | 5→6→7 | Index PIP |
+| 2 | index | DIP | 6→7→8 | Index DIP |
+| 3 | middle | PIP | 9→10→11 | Middle PIP |
+| 4 | middle | DIP | 10→11→12 | Middle DIP |
+| 5 | ring | PIP | 13→14→15 | Ring PIP |
+| 6 | ring | DIP | 14→15→16 | Ring DIP |
+| 7 | pinky | PIP | 17→18→19 | Pinky PIP |
+| 8 | pinky | DIP | 18→19→20 | Pinky DIP |
+
+##### Spread Angles (4 angles)
+
+Angle between adjacent finger PIP joints (computed via wrist-relative vectors). Uses PIP (not MCP) for better discrimination.
+
+| Index | Combination | Description |
+|-------|-------------|-------------|
+| 0 | Thumb PIP → Index PIP | Thumb-Index spread |
+| 1 | Index PIP → Middle PIP | Index-Middle spread |
+| 2 | Middle PIP → Ring PIP | Middle-Ring spread |
+| 3 | Ring PIP → Pinky PIP | Ring-Pinky spread |
+
+#### Fuzzy Coarse Coding
+
+**Bending angles (0°–180°):** 5 states with 30° overlap
+
+| State | Range | Meaning |
+|-------|-------|---------|
+| 0 | 0°–60° | Tight fist |
+| 1 | 30°–90° | Large bend |
+| 2 | 60°–120° | Half bent |
+| 3 | 90°–150° | Slight bend |
+| 4 | 120°–180° | Straight |
+
+**Spread angles (0°–60°):** 5 states with overlap
+
+| State | Range | Meaning |
+|-------|-------|---------|
+| 0 | 0°–15° | Closed |
+| 1 | 7.5°–22.5° | Converging |
+| 2 | 15°–30° | Middle |
+| 3 | 22.5°–37.5° | Spread |
+| 4 | 30°–60° | Fully open |
+
+**Bitstring length:** 65 bits (13 angles × 5 states). A single angle can fall into 1–2 adjacent states (multi-hot encoding). Maximum 2 consecutive 1s (impossible to have 3 due to 30° overlap design).
+
+#### Usage Example
+
+```python
+from SLBHS.clustering.theta_clusterer import ThetaClusterer
+
+# Train
+clf = ThetaClusterer()
+clf.fit('/path/to/h5/folder/', top_k=10000)
+clf.save('/path/to/model/')
+
+# Predict
+clf.load('/path/to/model/')
+labels = clf.predict(X_new)  # (M, 63) → (M,)
+
+# Statistics
+hist = clf.histogram(n=20)
+
+# Report
+clf.generate_report(
+    h5_folder='/path/to/h5/folder/',
+    output_path='/path/to/report.txt',
+    top_n=20,
+    samples_per_class=2
+)
+```
+
+---
+
 ## `SLBHS.viz.plot_config`
 
 ### `get_cluster_colors(labels, cmap_name='gist_rainbow', n_clusters=512) -> list`
@@ -1038,6 +1327,5 @@ X, meta = loader.load()
 print(f"Loaded {meta['n_frames']} frames from {meta['n_files']} files")
 ```
 
----
 
-_Last updated: 2026-05-07_
+

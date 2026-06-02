@@ -830,7 +830,7 @@ class ThetaClusterer:
     # Generate Report
     # --------------------------------------------------------------------------
 
-    def generate_report(self, h5_folder, output_path, top_n=10, samples_per_class=3):
+    def generate_report(self, h5_folder, output_path, top_n=1024, samples_per_class=3):
         """
         Generate analysis report with top N encoding sample coordinates.
 

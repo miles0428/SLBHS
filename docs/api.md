@@ -46,68 +46,26 @@ features = compute_cosine_features(landmarks)  # shape (N, 15)
 
 ---
 
-## `SLBHS.clustering.super_cluster`
+> **⚠️ DEPRECATED** — Removed in commit `30432a4`. Historical record only.
+## `SLBHS.clustering.super_cluster` (DEPRECATED)
 
 ### `SuperClusterer`
 
 Hierarchical clustering of K-Means centers into super clusters via agglomerative clustering.
 
-#### Constructor
-
-```python
-SuperClusterer(kmeans_labels=None, kmeans_centers=None, results_dir=None)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `kmeans_labels` | np.ndarray (N,) | None | Per-frame K-Means labels |
-| `kmeans_centers` | np.ndarray (k, 63) | None | K-Means cluster centers |
-| `results_dir` | str | auto | Save location |
-
-#### Methods
-
-##### `fit(n_super=20, linkage='ward', metric='euclidean') -> Tuple[np.ndarray, np.ndarray]`
-
-Run agglomerative clustering on centers.
-
-**Parameters**
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `n_super` | int | 20 | Number of super clusters |
-| `linkage` | str | 'ward' | Linkage method: 'ward', 'complete', 'average', 'single' |
-| `metric` | str | 'euclidean' | Distance metric |
-
-**Returns**
-- `super_labels`: `(k,)` int — super cluster ID per center
-- `frame_super`: `(N,)` int — super cluster ID per frame
-
-##### `save(results_dir=None) -> dict`
-
-Save `super_labels.npy` and `super_meta.json`.
-
-**Returns**
-- `dict` — paths of saved files
-
-##### `load(results_dir=None) -> np.ndarray`
-
-Load `super_labels.npy` from disk.
-
-**Returns**
-- `super_labels`: `(k,)` int
-
-**Examples**
-
-```python
-from SLBHS.clustering.super_cluster import SuperClusterer
-
-sc = SuperClusterer(kmeans_labels=labels, kmeans_centers=centers)
-super_labels, frame_super = sc.fit(n_super=20, linkage='ward')
-sc.save()
-```
+*(This module was removed. Use `ThetaClusterer` from `SLBHS.clustering.theta_clusterer` for hand-pose classification, or `SimilarityPipeline` from `SLBHS.similarity` for token-transition similarity analysis.)*
 
 ---
 
+## `SLBHS.clustering.kmeans` (DEPRECATED)
+
+### `KMeansClusterer`
+
+K-Means clusterer with inference support.
+
+*(This module was removed. Use `ThetaClusterer` from `SLBHS.clustering.theta_clusterer` for hand-pose classification.)*
+
+---
 ## `SLBHS.clustering.reducer`
 
 ### `UMAPReducer`
@@ -377,75 +335,15 @@ print(__version__)  # '0.1.10'
 ---
 
 
-## CLI Scripts
+> **⚠️ DEPRECATED** — These scripts were removed in commit `23143cd`. Historical record only.
+
+## CLI Scripts (DEPRECATED)
 
 ### `run_pipeline.py`
 
-Super Cluster Pipeline CLI — loads a pre-trained K-Means model and processes H5 files to produce super clusters.
+Super Cluster Pipeline CLI.
 
-#### `parse_args() -> argparse.Namespace`
-
-Parse command-line arguments for the pipeline.
-
-**Returns**
-- `argparse.Namespace` with the following attributes:
-
-| Attribute | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `folder` | str | None | Path to folder containing multiple H5 files (batch mode via `update()+finalize()`) |
-| `h5` | str | None | Path to a single H5 file (single-file mode via `fit()`) |
-| `model_dir` | str | None | KMeans model directory containing `kmeans_model.joblib` + `kmeans_scaler.joblib` |
-| `output` | str | 'results' | Results output directory |
-| `tau` | float | 0.9 | Similarity threshold (0.0–1.0). `S_ij > tau` → edge. Default: 0.9 |
-| `delta_t` | int | 10 | Transition interval (`n → n+delta_t`). Default: 10 |
-| `min_transitions` | int | 0 | Minimum transition count. Pairs below this are zeroed. Default: 0 |
-| `symmetrize` | bool | True | Symmetrize transition matrix |
-| `verbose` | bool | False | Enable verbose (DEBUG) logging |
-
-**Modes**
-
-| Mode | Flag | Method called |
-|------|------|---------------|
-| Batch (multiple H5) | `--folder` | `pipeline.update()` + `pipeline.finalize()` |
-| Single H5 | `--h5` | `pipeline.fit()` directly |
-
-**Examples**
-
-```bash
-# Batch mode (multiple H5 files)
-python run_pipeline.py \\
-    --folder /path/to/h5/folder \\
-    --model-dir /path/to/kmeans/model/ \\
-    --delta-t 10 \\
-    --tau 0.9 \\
-    --output results/
-
-# Single H5 mode (debug)
-python run_pipeline.py \\
-    --h5 /path/to/file.h5 \\
-    --model-dir /path/to/kmeans/model/ \\
-    --delta-t 10 \\
-    --tau 0.9 \\
-    --output results/
-
-# Verbose output
-python run_pipeline.py --folder /path/to/h5/folder --model-dir /path/to/kmeans/model/ -v
-```
-
-#### `main() -> int`
-
-Entry point for the CLI script. Returns 0 on success, non-zero on failure.
-
-**Process**
-1. Parse arguments with `parse_args()`
-2. Validate input (exactly one of `--folder` or `--h5` required)
-3. Load H5 data (`aligned_63d`, `x_vec`, `y_vec`, `z_vec`)
-4. Run pipeline (`update()+finalize()` or `fit()`)
-5. Save results with `pipeline.save()`
-6. Print summary (k, tau, delta_t, model_dir, N Super Clusters, tokens in clusters)
-
-**Returns**
-- `int` — exit code (0 = success)
+*(This script was removed. Use `ThetaClusterer` + `SimilarityPipeline` chaining for the equivalent pipeline.)*
 
 ---
 
@@ -473,7 +371,7 @@ Fit and predict hand labels.
 **Examples**
 
 ```python
-from SLBHS.clustering.super_cluster_pipeline import HandLabeler
+from SLBHS.similarity.hand_labeler import HandLabeler
 
 labeler = HandLabeler()
 hand_labels = labeler.fit_predict(x_vec, y_vec, z_vec)
@@ -525,169 +423,27 @@ Get transition matrix.
 
 ---
 
-## `SimilarityMatrix`
+## `SimilarityMatrix` (DEPRECATED)
 
 Computes similarity matrix S from transition matrix.
 
-### Methods
-
-#### `compute(M, symmetrize=True) -> np.ndarray`
-
-Compute similarity matrix.
-
-**Parameters**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `M` | (k, k) float64 | Raw transition count matrix C |
-| `symmetrize` | bool | Symmetrize matrix (default True) |
-
-**Returns**
-- `(k, k)` float64 — cosine similarity matrix S
-
-**Process**
-1. Symmetrize: `W = (M + M.T) / 2`
-2. Zero diagonal (remove self-transitions): `W_ii = 0`
-3. Row normalize: `M_prob_ij = W_ij / Σ_k(W_ik)` → probability matrix
-4. Cosine similarity with i/j excluded: `S_ij = cos(M_prob[i] excluding i/j, M_prob[j] excluding i/j)` — prevents self-correlation inflation
-5. Set diagonal `S_ii = 1.0`
+*(This module was removed. Use `CosineSimilarity` from `SLBHS.similarity.cosine_similarity` instead.)*
 
 ---
 
-## `BigClusterer`
+## `BigClusterer` (DEPRECATED)
 
 Extracts Super Clusters based on similarity threshold.
 
-### Constructor
-
-```python
-BigClusterer(tau=0.9)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `tau` | float | 0.9 | Similarity threshold. If S_ij > tau, an edge is created between token i and j. Default: 0.9 |
-
-### Methods
-
-#### `fit(S, tau=None) -> self`
-
-Extract Super Clusters from similarity matrix S.
-
-**Parameters**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `S` | (k, k) float64 | Cosine similarity matrix |
-| `tau` | float or None | Override constructor's tau |
-
-**Returns**
-- `self`
-
-#### `get_clusters() -> dict`
-
-Get Super Cluster mapping.
-
-**Returns**
-- `dict` — `{token_id: super_cluster_id}`
+*(This module was removed. Super-cluster extraction is now handled by `ThetaClusterer.generate_report()` and `SimilarityPipeline` from `SLBHS.similarity`.)*
 
 ---
 
-## `BigClusterPipeline`
+## `BigClusterPipeline` (DEPRECATED)
 
 Chains all steps, one-shot Phase 2 output.
 
-### Constructor
-
-```python
-BigClusterPipeline(
-    k=512,
-    tau=0.9,
-    delta_t=10,
-    min_transitions=0,
-    symmetrize=True,
-    model_dir=None,
-    results_dir=None
-)
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `k` | int | 512 | K-Means cluster count |
-| `tau` | float | 0.9 | Similarity threshold |
-| `delta_t` | int | 10 | Transition interval |
-| `min_transitions` | int | 0 | Minimum transition count |
-| `symmetrize` | bool | True | Symmetrize matrix |
-| `model_dir` | str or None | None | KMeans model directory (kmeans_model.joblib + kmeans_scaler.joblib) |
-| `results_dir` | str or None | None | Pipeline output directory |
-
-### Methods
-
-#### `fit(X, x_vec, y_vec, z_vec, labels=None, tau=None, min_transitions=None, delta_t=None, symmetrize=None, model_dir=None, results_dir=None) -> self`
-
-Run full pipeline.
-
-**Parameters**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `X` | (N, 63) float32 | aligned_63d hand pose data |
-| `x_vec` | (N, 3) float32 | x-axis vector |
-| `y_vec` | (N, 3) float32 | y-axis vector |
-| `z_vec` | (N, 3) float32 | z-axis vector |
-| `labels` | (N,) int or None | None | Token_ID per frame (input); if None, generated internally from X with loaded model |
-| `tau` | float or None | Override constructor's tau |
-
-| `min_transitions` | int or None | Override constructor's min_transitions |
-| `delta_t` | int or None | Override constructor's delta_t |
-| `symmetrize` | bool or None | Override constructor's symmetrize |
-| `model_dir` | str or None | KMeans model directory (kmeans_model.joblib + kmeans_scaler.joblib) |
-| `results_dir` | str or None | Override constructor's results_dir |
-
-**Returns**
-- `self`
-
-#### `update(X, x_vec, y_vec, z_vec) -> self`
-
-Accumulate one H5 file's data into the transition counter (batch mode).
-KMeans model is loaded once on first call, then reused for subsequent calls.
-Does **not** compute S or run BigClusterer — call `finalize()` after all updates.
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `X` | (N, 63) float32 | aligned_63d hand pose data |
-| `x_vec` | (N, 3) float32 | x-axis vector |
-| `y_vec` | (N, 3) float32 | y-axis vector |
-| `z_vec` | (N, 3) float32 | z-axis vector |
-
-**Returns**
-- `self`
-
-#### `finalize(tau=None) -> self`
-
-Compute similarity matrix S and run BigClusterer.
-Call after all `update()` calls.
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `tau` | float | self.tau | Similarity threshold |
-
-**Returns**
-- `self`
-
-#### `save(results_dir) -> None`
-
-Save outputs to results_dir.
-
-**Output Files**
-
-| File | Format | Description |
-|------|--------|-------------|
-| `similarity_matrix.npy` | (k, k) float64 | Cosine similarity matrix S |
-| `transition_matrix.npy` | (k, k) float64 | Raw transition count matrix C |
-| `symmetrized_matrix.npy` | (k, k) float64 | Symmetrized matrix W |
-| `super_cluster_map.json` | JSON | `{token_id: super_cluster_id}` |
-| `pipeline_phase2.json` | JSON | Phase 2 full summary |
+*(This module was removed. Use `ThetaClusterer` + `SimilarityPipeline` chaining instead.)*
 
 ---
 
@@ -1306,7 +1062,7 @@ hist = clf.histogram(n=20)
 ##### `generate_report`
 
 ```python
-ThetaClusterer.generate_report(self, h5_folder, output_path, top_n=10, samples_per_class=3) -> str
+ThetaClusterer.generate_report(self, h5_folder, output_path, top_n=1024, samples_per_class=3) -> str
 ```
 
 Generate analysis report with top N encoding sample coordinates.
@@ -1315,7 +1071,7 @@ Generate analysis report with top N encoding sample coordinates.
 clf.generate_report(
     h5_folder='/path/to/h5/',
     output_path='/path/to/report.txt',
-    top_n=10,
+    top_n=1024,
     samples_per_class=2
 )
 ```
@@ -1324,7 +1080,7 @@ clf.generate_report(
 |-----------|------|---------|-------------|
 | `h5_folder` | str | required | Path to H5 folder (for raw coordinates) |
 | `output_path` | str | required | Output report file path |
-| `top_n` | int | 10 | Report only top_n rankings |
+| `top_n` | int | 1024 | Report only top_n rankings |
 | `samples_per_class` | int | 3 | Number of samples per class |
 
 | Return | Type | Description |

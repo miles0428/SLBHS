@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # --------------------------------------------------------------------------
-# Angle index map (1-based landmark indices used in MediaPipe convention)
+# Angle index map (0-based MediaPipe landmark indices)
 # --------------------------------------------------------------------------
 _THETA_INDEX = {
     0: (2,  3,  4),   # thumb MCP→IP→TIP
@@ -35,7 +35,7 @@ _THETA_INDEX = {
     8: (18, 19, 20),  # pinky DIP
 }
 
-# Spread angle index: adjacent PIP pairs (1-based MediaPipe landmark indices)
+# Spread angle index: adjacent PIP pairs (0-based MediaPipe landmark indices)
 _SPREAD_INDEX = {
     0: (2, 6),    # Thumb PIP → Index PIP
     1: (6, 10),   # Index PIP → Middle PIP
@@ -69,6 +69,7 @@ _STATE_BOUNDS_SPREAD = [
     (22.5, 37.5),   # state 3: Spread — 22.5°~37.5°
     (30.0, 60.0),   # state 4: Fully open — 30°~60°
 ]
+_SPREAD_MAX_DEG = _STATE_BOUNDS_SPREAD[-1][1]
 
 
 # --------------------------------------------------------------------------
@@ -208,8 +209,9 @@ def _theta_to_bitstring(theta, q=5):
             if not np.isfinite(Theta):
                 continue
 
-            if Theta < 0.0 or Theta > 180.0:
-                logger.warning('[ThetaClusterer] Spread angle out of [0°,180°] range: %.2f° at row %d, angle %d',
+            if Theta < 0.0 or Theta > _SPREAD_MAX_DEG:
+                logger.warning('[ThetaClusterer] Spread angle out of [0°,%d°] range: %.2f° at row %d, angle %d',
+                               int(_SPREAD_MAX_DEG),
                                Theta, row, n_bending + angle_idx)
 
             for state_idx, (lo, hi) in enumerate(_STATE_BOUNDS_SPREAD):
@@ -453,14 +455,6 @@ class ThetaClusterer:
         logger.info('[ThetaClusterer] Fitted. n_classes=%d  q=%d', self.n_classes_, q)
         return self
 
-    def get_labels(self, X=None):
-        """
-        Alias for fit().fit_predict-compatible shim.
-        """
-        if X is None:
-            raise ValueError('X is required for get_labels()')
-        return self.predict(X)
-
     # --------------------------------------------------------------------------
     # Histogram
     # --------------------------------------------------------------------------
@@ -501,7 +495,7 @@ class ThetaClusterer:
             for rank, (bk, count) in enumerate(items, 1):
                 if rank > n:
                     break
-                bits_arr = np.unpackbits(np.frombuffer(bk * (65 // 8 + 1), dtype=np.uint8))[:_N_BITS]
+                bits_arr = np.unpackbits(np.frombuffer(bk, dtype=np.uint8), bitorder='little')[:_N_BITS]
                 bitstring = ''.join(bits_arr.astype(str))
 
                 result.append({
@@ -556,7 +550,7 @@ class ThetaClusterer:
         Returns:
             labels : np.ndarray (M,), int32 label IDs in [0, n_classes_-1]
         """
-        if self.bitstring_to_label_ is None and self.bitstring_to_label_str_ is None:
+        if not self.bitstring_to_label_ and not self.bitstring_to_label_str_:
             raise RuntimeError('Must fit() or load() before predict()')
 
         theta = _extract_thetas(X_new)
@@ -888,7 +882,9 @@ class ThetaClusterer:
                     lines.append(f"      {name:12}: {angles[9+i]:.2f}°")
 
         # Write to file
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         with open(output_path, 'w') as f:
             f.write('\n'.join(lines))
 

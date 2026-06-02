@@ -1,6 +1,7 @@
 from .version import __version__
 
 # TEMP PATCH: only import modules that actually exist
+DataLoader = None
 try:
     from .data.loader import DataLoader
 except ImportError:
@@ -8,11 +9,13 @@ except ImportError:
 
 from .similarity import CosineSimilarity, HandLabeler, TransitionCounter
 
+ThetaClusterer = None
 try:
     from .clustering.theta_clusterer import ThetaClusterer
 except ImportError:
     pass
 
+SLBHSViz = None
 try:
     from .viz.visualizer import SLBHSViz
 except ImportError:

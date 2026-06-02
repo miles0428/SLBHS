@@ -8,7 +8,6 @@ Hand pose clustering pipelines for sign language basic handshapes.
 SLBHS/
 ├── clustering/        # Clustering modules
 │   ├── theta_clusterer.py   # ThetaClusterer (main classifier)
-│   └── kmeans.py            # KMeansClusterer (legacy)
 ├── similarity/        # Similarity computation pipeline
 │   ├── similarity_pipeline.py  # SimilarityPipeline (end-to-end)
 │   ├── transition_counter.py   # TransitionCounter
@@ -71,18 +70,9 @@ file_crop---xxxxxxxxxx.h5
 | `transition_matrix.npy` | (k, k) | Transition counts C |
 | `super_cluster_map.json` | JSON | `{token_id: super_cluster_id}` |
 
-## CLI Arguments
+## CLI
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--h5` | — | Single H5 path |
-| `--folder` | — | Folder of H5 files (batch mode) |
-| `--model-dir` | — | Pretrained model directory (required) |
-| `--delta-t` | 10 | Transition interval |
-| `--tau` | 0.9 | Similarity threshold |
-| `--min-transitions` | 0 | Minimum transition count filter |
-| `--symmetrize` | true | Symmetrize transition matrix |
-| `--output` | results | Output directory |
+Current usage is through the Python API shown above.
 
 ## Documentation
 

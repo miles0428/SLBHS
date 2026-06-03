@@ -15,12 +15,6 @@ try:
 except ImportError:
     pass
 
-SLBHSViz = None
-try:
-    from .viz.visualizer import SLBHSViz
-except ImportError:
-    pass
-
 __all__ = [
     '__version__',
     'DataLoader',
@@ -28,5 +22,4 @@ __all__ = [
     'HandLabeler',
     'TransitionCounter',
     'ThetaClusterer',
-    'SLBHSViz',
 ]

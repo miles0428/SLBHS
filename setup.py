@@ -16,7 +16,7 @@ install_requires = [
 setup(
     name="SLBHS",
     version=__version__,
-    packages=["SLBHS", "SLBHS.data", "SLBHS.clustering", "SLBHS.viz"],
+    packages=["SLBHS", "SLBHS.data", "SLBHS.clustering", "SLBHS.similarity"],
     package_dir={"": "."},
     install_requires=install_requires,
     author="Yu-Cheng Chung",
@@ -30,11 +30,5 @@ setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.8",
-    entry_points={
-        "console_scripts": [
-            "slbhs=SLBHS.run_visualization:main",
-            "slbhs-bigcluster=SLBHS.run_pipeline:main",
-            "slbhs-similarity=SLBHS.run_compute_similarity:main",
-        ],
-    },
+    entry_points={},
 )

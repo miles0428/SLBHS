@@ -14,7 +14,7 @@ class TestHandFeatureExtractor:
     @pytest.fixture
     def extractor(self):
         return HandFeatureExtractor(
-            model_path='/home/ubuntu/.openclaw/workspace-coding/SLBHS/SLBHS/hand_landmarker.task',
+            model_path=os.path.join(os.path.dirname(__file__), 'models', 'hand_landmarker.task'),
             rgb_input=False
         )
 

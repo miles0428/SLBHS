@@ -12,3 +12,30 @@ notebooks/
 .DS_Store
 results_*/
 *.log
+
+# Build artifacts
+*.egg-info/
+build/
+dist/
+*.egg
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Test/cache
+.pytest_cache/
+.cache/
+*.bak
+*.timing
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

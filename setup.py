@@ -11,6 +11,7 @@ install_requires = [
     "matplotlib>=3.7.0",
     "scipy",
     "tqdm",
+    "mediapipe",
 ]
 
 setup(

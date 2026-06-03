@@ -57,7 +57,7 @@ class SimilarityPipeline:
         self,
         clusterer,
         k: int = 1024,
-        delta_t: int = 1,
+        delta_t: int = 10,
         min_transitions: int = 0,
     ):
         """

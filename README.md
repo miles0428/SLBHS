@@ -15,8 +15,6 @@ SLBHS/
 │   └── hand_labeler.py        # HandLabeler
 ├── data/
 │   └── loader.py      # DataLoader for H5 files
-└── viz/
-    └── ...            # Visualization modules
 ```
 
 ## Installation

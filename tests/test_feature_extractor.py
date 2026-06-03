@@ -21,7 +21,7 @@ class TestHandFeatureExtractor:
     @pytest.fixture
     def test_image(self):
         import cv2
-        img_path = '/home/ubuntu/.openclaw/media/inbound/file_2---1f340ea1-1d4e-4b9e-acc0-0f512c6e90d8.jpg'
+        img_path = os.path.join(os.path.dirname(__file__), 'data', 'YC_test_image.jpg')
         image = cv2.imread(img_path)
         assert image is not None, "Failed to load test image"
         return image

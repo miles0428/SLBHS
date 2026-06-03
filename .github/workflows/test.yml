@@ -25,7 +25,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgles2 libgl1 libglx0
+          sudo apt-get install -y libegl1 libgles2 libgl1 libglx0 libglib2.0-0
 
       - name: Install Python dependencies
         run: |

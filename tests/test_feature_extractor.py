@@ -13,10 +13,8 @@ class TestHandFeatureExtractor:
 
     @pytest.fixture
     def extractor(self):
-        return HandFeatureExtractor(
-            model_path=os.path.join(os.path.dirname(__file__), 'models', 'hand_landmarker.task'),
-            rgb_input=False
-        )
+        # Model auto-detected to SLBHS/data/hand_landmarker.task
+        return HandFeatureExtractor(rgb_input=False)
 
     @pytest.fixture
     def test_image(self):

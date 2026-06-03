@@ -16,6 +16,10 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 
+import os as _os
+_DATA_DIR = _os.path.dirname(_os.path.abspath(__file__))
+_DEFAULT_MODEL_PATH = _os.path.join(_DATA_DIR, 'hand_landmarker.task')
+
 class HandFeatureExtractor:
     """
     Extract hand pose features (aligned_63d + orthogonal basis) from image.
@@ -33,18 +37,20 @@ class HandFeatureExtractor:
         wrist_px : np.ndarray (3,) — wrist pixel coordinates
     """
 
-    def __init__(self, model_path="hand_landmarker.task", num_hands=2,
+    def __init__(self, model_path=None, num_hands=2,
                  min_detection_confidence=0.3, min_presence_confidence=0.3,
                  min_tracking_confidence=0.3, rgb_input=False):
         """
         Args:
-            model_path: path to MediaPipe hand_landmarker.task
+            model_path: path to MediaPipe hand_landmarker.task (auto-detected if None)
             num_hands: 1 or 2
             min_detection_confidence: float
             min_presence_confidence: float
             min_tracking_confidence: float
             rgb_input: if True, treat input as RGB; else BGR (OpenCV default)
         """
+        if model_path is None:
+            model_path = _DEFAULT_MODEL_PATH
         base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,

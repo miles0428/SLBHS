@@ -994,7 +994,12 @@ Angle between adjacent finger PIP joints (computed via wrist-relative vectors). 
 | 3 | 22.5°–37.5° | Spread |
 | 4 | 30°–60° | Fully open |
 
-**Bitstring length:** 65 bits (13 angles × 5 states). A single angle can fall into 1–2 adjacent states (multi-hot encoding). Maximum 2 consecutive 1s (impossible to have 3 due to 30° overlap design).
+**Bitstring length:** 66 bits (13 angles × 5 states + 1 sign bit). A single angle can fall into 1–2 adjacent states (multi-hot encoding). Maximum 2 consecutive 1s (impossible to have 3 due to 30° overlap design).
+
+- **Sign bit (66th bit):** `spread[0]` (thumb–index angle) uses a signed representation:
+  - `cross(thumb_dir, index_dir) · cross(index_dir, pinky_dir) > 0` → thumb is on outer (pinky) side → sign bit = 0 (positive)
+  - `cross(thumb_dir, index_dir) · cross(index_dir, pinky_dir) < 0` → thumb is on inner (body) side → sign bit = 1 (negative)
+  - This preserves directional information lost in the fuzzy encoding of spread[0].
 
 #### Usage Example
 

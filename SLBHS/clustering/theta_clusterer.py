@@ -47,7 +47,7 @@ _N_BENDING_ANGLES = 9
 _N_SPREAD_ANGLES = 4
 _N_ANGLES = _N_BENDING_ANGLES + _N_SPREAD_ANGLES  # 13 total
 _N_STATES = 5          # 5 fuzzy states per angle
-_N_BITS = _N_ANGLES * _N_STATES  # 65 bits total
+_N_BITS = _N_ANGLES * _N_STATES + 1  # 66 bits (65 fuzzy + 1 sign bit)
 
 # --------------------------------------------------------------------------
 # Fuzzy state boundaries (in degrees, shared across all angles)
@@ -114,6 +114,50 @@ def _compute_spread(A, B, C):
     return angle_deg
 
 
+def _compute_spread_signed(aligned_63d_row):
+    """
+    Compute signed thumb-index spread angle.
+    
+    正負定義：
+    - A = cross(thumb方向, index方向)
+    - B = cross(index方向, pinky方向)
+    - dot(A, B) > 0 → 拇指在食指外側（靠小指側）→ 正值
+    - dot(A, B) < 0 → 拇指在食指內側（靠身體側）→ 負值
+    
+    aligned_63d_row: shape (63,) = 21 landmarks × 3 coords
+    Returns: signed angle in degrees (scalar)
+    """
+    # MediaPipe landmark indices:
+    # 0=WRIST, 1=THUMB_CMC, 5=INDEX_MCP, 6=INDEX_PIP, 17=PINKY_MCP
+    
+    pts = aligned_63d_row.reshape(21, 3)
+    
+    # 從 WRIST 指向各指尖
+    thumb_dir = pts[3] - pts[0]   # THUMB_TIP(3) - WRIST(0)
+    index_dir = pts[6] - pts[0]    # INDEX_TIP(6) - WRIST(0)
+    pinky_dir = pts[18] - pts[0]   # PINKY_TIP(18) - WRIST(0)
+    
+    thumb_dir = thumb_dir / (np.linalg.norm(thumb_dir) + 1e-8)
+    index_dir = index_dir / (np.linalg.norm(index_dir) + 1e-8)
+    pinky_dir = pinky_dir / (np.linalg.norm(pinky_dir) + 1e-8)
+    
+    # Cross products
+    A = np.cross(thumb_dir, index_dir)   # thumb × index
+    B = np.cross(index_dir, pinky_dir)   # index × pinky
+    
+    # Dot product → 正負判斷
+    dot_val = np.dot(A, B)
+    
+    # 計算無符號角度（純量）
+    dot_clipped = np.clip(np.dot(index_dir, thumb_dir), -1.0, 1.0)
+    angle_rad = np.arccos(dot_clipped)
+    angle_deg = np.degrees(angle_rad)
+    
+    # 乘以符號
+    sign = 1.0 if dot_val >= 0 else -1.0
+    return sign * angle_deg
+
+
 def _extract_thetas(X, theta_index=_THETA_INDEX, spread_index=_SPREAD_INDEX):
     """
     Extract the 9 finger-bending angles and 4 finger-spread angles from aligned_63d data.
@@ -151,30 +195,42 @@ def _extract_thetas(X, theta_index=_THETA_INDEX, spread_index=_SPREAD_INDEX):
 
     # Extract spread angles (indices 9-12)
     for idx, (mcp_a, mcp_b) in spread_index.items():
-        vec_a = X[:, mcp_a * 3 : mcp_a * 3 + 3] - wrist_coords
-        vec_b = X[:, mcp_b * 3 : mcp_b * 3 + 3] - wrist_coords
-        for row in range(N):
-            try:
-                spread = _compute_spread(vec_a[row], wrist_coords, vec_b[row])
-                if np.isfinite(spread):
-                    theta[row, n_bending + idx] = spread
-                else:
+        if idx == 0:
+            # Spread[0]: signed thumb-index angle
+            for row in range(N):
+                try:
+                    signed = _compute_spread_signed(X[row])
+                    if np.isfinite(signed):
+                        theta[row, n_bending + idx] = signed
+                    else:
+                        theta[row, n_bending + idx] = np.nan
+                except Exception:
                     theta[row, n_bending + idx] = np.nan
-            except Exception:
-                theta[row, n_bending + idx] = np.nan
+        else:
+            vec_a = X[:, mcp_a * 3 : mcp_a * 3 + 3] - wrist_coords
+            vec_b = X[:, mcp_b * 3 : mcp_b * 3 + 3] - wrist_coords
+            for row in range(N):
+                try:
+                    spread = _compute_spread(vec_a[row], wrist_coords, vec_b[row])
+                    if np.isfinite(spread):
+                        theta[row, n_bending + idx] = spread
+                    else:
+                        theta[row, n_bending + idx] = np.nan
+                except Exception:
+                    theta[row, n_bending + idx] = np.nan
 
     return theta
 
 
 def _theta_to_bitstring(theta, q=5):
     """
-    Fuzzy coarse coding: map 13 angles → 65-bit multi-hot bitstring.
+    Fuzzy coarse coding: map 13 angles → 66-bit multi-hot bitstring.
 
     Args:
         theta : np.ndarray (N, 13)
         q     : int, number of state intervals (default 5)
     Returns:
-        bits  : np.ndarray (N, 65) — uint8, values 0 or 1
+        bits  : np.ndarray (N, 66) — uint8, values 0 or 1
     """
     if q != 5:
         raise ValueError(f'ThetaClusterer currently only supports q=5 (got q={q})')
@@ -218,12 +274,18 @@ def _theta_to_bitstring(theta, q=5):
                 if lo <= Theta < hi:
                     bits[row, bit_offset + state_idx] = 1
 
+    # Append sign bit for spread[0] (theta index 9)
+    # spread[0] >= 0 → sign bit 0, spread[0] < 0 → sign bit 1
+    for row in range(N):
+        sign_bit = 1 if theta[row, 9] < 0 else 0
+        bits[row, -1] = sign_bit
+
     return bits
 
 
 def _bitstring_to_bytes(bs_arr):
     """
-    Convert (N, 65) uint8 bitstrings to a list of bytes objects (one per row).
+    Convert (N, 66) uint8 bitstrings to a list of bytes objects (one per row).
 
     Returns:
         list of bytes objects, length N

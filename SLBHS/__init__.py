@@ -9,6 +9,8 @@ except ImportError:
 
 from .similarity import CosineSimilarity, HandLabeler, TransitionCounter
 
+from .geometry import HandPoseGeometrySwapper
+
 ThetaClusterer = None
 try:
     from .clustering.theta_clusterer import ThetaClusterer
@@ -22,4 +24,5 @@ __all__ = [
     'HandLabeler',
     'TransitionCounter',
     'ThetaClusterer',
+    'HandPoseGeometrySwapper',
 ]

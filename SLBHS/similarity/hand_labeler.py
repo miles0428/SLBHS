@@ -55,6 +55,8 @@ class HandLabeler:
         self._fitted = True
 
         labels = np.empty(x_vec.shape[0], dtype='<U1')
+        # Degenerate case: when x_vec and y_vec are collinear, cross_xy=0,
+        # so dot_product=0 and the sample is classified as 'R' (dot >= 0).
         labels[dot_product < 0] = 'L'
         labels[dot_product >= 0] = 'R'
 

@@ -97,16 +97,33 @@ class HandPoseGeometrySwapper:
             If any required key is missing from ``feature_dict``.
         ValueError
             If ``label`` is not 'L' or 'R'.
+        AssertionError
+            If ``aligned`` does not have shape ``(63,)``.
         """
         self._validate_keys(feature_dict)
         self._validate_label(feature_dict[self._KEY_LABEL])
 
         original = feature_dict
 
+        # Validate vector types and convert to numpy arrays if needed
+        x_vec = original[self._KEY_X]
+        y_vec = original[self._KEY_Y]
+        z_vec = original[self._KEY_Z]
+        if not isinstance(x_vec, np.ndarray):
+            x_vec = np.array(x_vec, dtype=np.float32)
+        if not isinstance(y_vec, np.ndarray):
+            y_vec = np.array(y_vec, dtype=np.float32)
+        if not isinstance(z_vec, np.ndarray):
+            z_vec = np.array(z_vec, dtype=np.float32)
+
         # Negate X-axis — in-place negation of a copy; original array untouched
-        x_vec_new = -original[self._KEY_X].copy()
-        y_vec_new = original[self._KEY_Y].copy()   # unchanged
-        z_vec_new = original[self._KEY_Z].copy()   # unchanged
+        x_vec_new = -x_vec.copy()
+        y_vec_new = y_vec.copy()   # unchanged
+        z_vec_new = z_vec.copy()   # unchanged
+
+        # Validate aligned shape before passing through
+        aligned = original[self._KEY_ALIGNED]
+        assert aligned.shape == (63,), f"Expected (63,), got {aligned.shape}"
 
         # Flip handedness
         label_map = {'L': 'R', 'R': 'L'}

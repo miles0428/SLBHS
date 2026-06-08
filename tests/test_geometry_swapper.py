@@ -281,3 +281,5 @@ class TestBatchBehavior:
         assert first['label']  == 'R'
         assert second['label'] == 'R'
         np.testing.assert_allclose(first['x_vec'],  second['x_vec'])
+        # aligned must be identical (passed through by reference, not copied)
+        assert first['aligned'] is second['aligned']

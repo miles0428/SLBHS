@@ -168,6 +168,93 @@ coords = pca.transform()
 
 ---
 
+## `SLBHS.geometry`
+
+### `HandPoseGeometrySwapper`
+
+Mirror-swap a hand-pose feature dict across the X-axis (geometric reflection).
+
+**Physical basis:**
+
+`HandLabeler` determines handedness via:
+```
+dot = np.sum(np.cross(x_vec, y_vec) * z_vec)
+L if dot < 0, R if dot >= 0
+```
+
+When `x_vec` is negated, `cross(-x_vec, y_vec) = -cross(x_vec, y_vec)`, so the dot product flips sign and the label inverts. This makes the swap a true geometric reflection, not an arbitrary label change.
+
+#### Constructor
+
+```python
+HandPoseGeometrySwapper()
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| None | — | — | No state is stored; the instance is stateless |
+
+#### Methods
+
+##### `swap`
+
+```python
+HandPoseGeometrySwapper.swap(self, feature_dict: Dict[str, Any]) -> Dict[str, Any]
+```
+
+Return a mirrored copy of the input hand-pose feature dict. The original dict is **never modified**.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `feature_dict` | `Dict[str, Any]` | Must contain `label`, `aligned`, `x_vec`, `y_vec`, `z_vec` |
+
+**`feature_dict` required keys:**
+
+| Key | Type | Shape | Description |
+|-----|------|-------|-------------|
+| `label` | `str` | — | `'L'` or `'R'` |
+| `aligned` | `np.ndarray` | `(63,)` | 63-D aligned hand pose vector |
+| `x_vec` | `np.ndarray` | `(3,)` | x-axis orientation vector |
+| `y_vec` | `np.ndarray` | `(3,)` | y-axis orientation vector |
+| `z_vec` | `np.ndarray` | `(3,)` | z-axis orientation vector |
+
+**Returns:** `Dict[str, Any]` with:
+- `x_vec` — X component negated (`X → -X`)
+- `y_vec` — unchanged
+- `z_vec` — unchanged
+- `aligned` — passed through unchanged (same object reference)
+- `label` — flipped (`'L' → 'R'`, `'R' → 'L'`)
+
+**Raises:**
+
+| Exception | Condition |
+|-----------|------------|
+| `KeyError` | Any required key is missing from `feature_dict` |
+| `ValueError` | `label` is not `'L'` or `'R'` |
+| `AssertionError` | `aligned` does not have shape `(63,)` |
+
+**Examples**
+
+```python
+import numpy as np
+from SLBHS.geometry import HandPoseGeometrySwapper
+
+swapper = HandPoseGeometrySwapper()
+feat = {
+    'label':   'L',
+    'aligned': np.ones(63, dtype=np.float32),
+    'x_vec':   np.array([1., 0., 0.], dtype=np.float32),
+    'y_vec':   np.array([0., 1., 0.], dtype=np.float32),
+    'z_vec':   np.array([0., 0., 1.], dtype=np.float32),
+}
+out = swapper.swap(feat)
+print(out['label'])      # 'R'
+print(out['x_vec'])     # array([-1.,  0.,  0.])
+print(out['aligned'] is feat['aligned'])  # True — original untouched
+```
+
+---
+
 ## `SLBHS` Top-Level
 
 ### `SLBHS.__version__`
@@ -195,30 +282,71 @@ Super Cluster Pipeline CLI.
 
 ---
 
-## `HandLabeler`
+## `HandLabeler` (SLBHS.similarity.hand_labeler)
 
-Determines left/right hand using `cross(vec_x, vec_y) dot vec_z`.
+Classify L/R hand from orientation vectors using the right-hand rule.
+
+**Physical basis:**
+
+```
+dot = np.sum(np.cross(x_vec, y_vec) * z_vec)
+L if dot < 0,  R if dot >= 0
+```
+
+`cross(x_vec, y_vec)` produces a vector perpendicular to the palm plane; the dot product with `z_vec` indicates handedness. When `x_vec` and `y_vec` are collinear, `cross_xy = 0`, so `dot_product = 0` and the sample is classified as `'R'`.
+
+### Constructor
+
+```python
+HandLabeler()
+```
 
 ### Methods
 
 #### `fit_predict(x_vec, y_vec, z_vec) -> np.ndarray`
 
-Fit and predict hand labels.
+Fit and predict hand labels in one step.
 
-**Parameters**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x_vec` | `(N, 3)` float32 | x-axis vectors |
+| `y_vec` | `(N, 3)` float32 | y-axis vectors |
+| `z_vec` | `(N, 3)` float32 | z-axis vectors |
 
-| Name | Type | Description |
-|------|------|-------------|
-| `x_vec` | (N, 3) float32 | x-axis vector |
-| `y_vec` | (N, 3) float32 | y-axis vector |
-| `z_vec` | (N, 3) float32 | z-axis vector |
+| Return | Type | Description |
+|--------|------|-------------|
+| `hand_labels` | `np.ndarray (N,)` | `'L'` or `'R'` (`'<U1'` dtype) |
 
-**Returns**
-- `(N,) '<U1'` — 'L' or 'R'
+#### `fit(x_vec, y_vec, z_vec) -> None`
+
+Sklearn-style fit (stores results internally; `predict` must be called separately).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x_vec` | `(N, 3)` float32 | x-axis vectors |
+| `y_vec` | `(N, 3)` float32 | y-axis vectors |
+| `z_vec` | `(N, 3)` float32 | z-axis vectors |
+
+#### `predict(x_vec, y_vec, z_vec) -> np.ndarray`
+
+Predict hand labels (requires prior `fit` call).
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `x_vec` | `(N, 3)` float32 | x-axis vectors |
+| `y_vec` | `(N, 3)` float32 | y-axis vectors |
+| `z_vec` | `(N, 3)` float32 | z-axis vectors |
+
+| Return | Type | Description |
+|--------|------|-------------|
+| `hand_labels` | `np.ndarray (N,)` | `'L'` or `'R'` (`'<U1'` dtype) |
+
+**Raises:** `RuntimeError` if called before `fit()`.
 
 **Examples**
 
 ```python
+import numpy as np
 from SLBHS.similarity.hand_labeler import HandLabeler
 
 labeler = HandLabeler()
